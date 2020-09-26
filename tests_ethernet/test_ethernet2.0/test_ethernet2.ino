@@ -1,20 +1,19 @@
-#include <SPI.h>
 #include <Ethernet.h>
 //#include <EthernetUdp.h>
+#include <SPI.h>
 
-
-#define LED 2
+#define LED 5
 
 EthernetClient cli;
 
 
   byte        host[]={82, 64, 32, 56};
-  int         port  = 1786;
+  int         port  = 1790;
 /*  byte        host[]={64, 233, 187, 99};                      // server IP
   int         port  = 80;                                     // server port
 */
   byte        mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};   // W5500 board  mac addr
-  byte        localIp[] = {192,168,0,30};                     // W5500 board fixed IP
+  byte        localIp[] = {192,168,1,30};                     // W5500 board fixed IP
 
 #define MAXLEN 2000  
   char        rxMessage[MAXLEN];
@@ -74,7 +73,7 @@ int getHttpData(EthernetClient* cli,char* data,uint16_t* len)
       while(millis()<(timerTo+TIMEOUT)){
         if(cli->available()>0){
           timerTo=millis();
-          inch=cli->read();                          Serial.print(inch);
+          inch=cli->read();                          // Serial.print(inch);
           
             if(pt<*len-1){data[pt]=inch;pt++;}
         }
@@ -86,26 +85,20 @@ int getHttpData(EthernetClient* cli,char* data,uint16_t* len)
   return -2;                  // not connected
 }
 
-void led()     // pour watchdog
-{
-  digitalWrite(LED,HIGH);delay(10);digitalWrite(LED,LOW);
-}
 
 void setup() {
 
-  Serial.begin(115200);delay(2000);
-  Serial.println("start (ça peut être long... 1 minute");
+  Serial.begin(115200);delay(1000);
+  Serial.println("start");
 
   pinMode(LED, OUTPUT);
-  for(int i=0;i<4;i++){delay(100);led();}
+  for(int i=0;i<3;i++){delay(100);digitalWrite(LED,HIGH);delay(10);digitalWrite(LED,LOW);}
       
   unsigned long t_beg=millis();
   if(Ethernet.begin((uint8_t*)mac) == 0){
-    led();
     Serial.print("Failed with DHCP... forcing Ip ");
     Ethernet.begin ((uint8_t*)mac, localIp);
     }
-  led();    
   Serial.print(millis()-t_beg);Serial.print(" ");Serial.println(Ethernet.localIP());
   delay(1000);
 }
@@ -114,21 +107,15 @@ void loop() {
 
     cnt++;
     Serial.print(cnt);Serial.print(" ");
-
-    led();
-    
+  
     txStatus=messToServer(&cli,host,port,"GET/");
     Serial.println(txStatus);
-
-    led();
-    
+  
     if(txStatus){
       len=MAXLEN;
       rxStatus=getHttpData(&cli,rxMessage,&len);
-      led();
       Serial.print(rxStatus);Serial.print(" len=");Serial.println(len);
     }
-    
     cli.stop();
     delay(1000);
  
