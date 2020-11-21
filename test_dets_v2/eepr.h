@@ -9,8 +9,7 @@
 #define EEPRLENGTH EEPRCRC+EEPRCRCLENGTH
 #define EEPRVERSLENGTH 2
 #define EEPRVERS   EEPRLENGTH+EEPRLENGTHLENGTH
-#define EEPRHEADERLENGTH EEPRCRCLENGTH+EEPRLENGTH+EEPRVERSLENGTH
-#define EEPRVERSLENGTH 3
+#define EEPRHEADERLENGTH EEPRCRCLENGTH+EEPRLENGTHLENGTH+EEPRVERSLENGTH
 
 class Eepr
 {
@@ -18,8 +17,8 @@ class Eepr
         Eepr();
         uint32_t calcCrc32(byte* data,uint16_t len);
         bool checkCrc32(byte* data,uint16_t len,uint32_t crc32);
-        void read(byte* data,uint16_t len,uint16_t addr);
-        void write(byte* data,uint16_t len,uint16_t addr);
+        void eeread(byte* data,uint16_t len,uint16_t addr);
+        void eewrite(byte* data,uint16_t len,uint16_t addr);
         void store(byte* data,uint16_t length); // longueur totale avec header
         bool load(byte*data,uint16_t length);   // longueur totale avec header
 };
