@@ -1,6 +1,6 @@
 #include "powerSleep.h"
 #include "hard.h"
-#include "eepr.h"
+#include <eepr.h>
 #include <shutil2.h>
 #include <shconst2.h>
 
@@ -22,7 +22,7 @@ uint8_t k;
 
 Eepr eeprom;
 
-#define CONFIGLEN 36
+#define CONFIGLEN 37
 byte    configData[CONFIGLEN];
 
 byte*  configVers;
@@ -135,6 +135,7 @@ void loop(){
             configPrint();
             break;
           case 'I':
+            memcpy(configVers,VERSION,2);
             configPrint();
             eeprom.store(configData,CONFIGLEN);
             configPrint();
@@ -251,7 +252,7 @@ void initConf()
   macAddr=(byte*)temp;
   temp +=6;
   concAddr=(byte*)temp;
-  temp +=5;
+  temp +=6;
 
   byte* configEndOfRecord=(byte*)temp;      // doit être le dernier !!!
 
@@ -272,7 +273,7 @@ void configPrint()
 {
     uint16_t configLen;memcpy(&configLen,configData+EEPRLENGTH,2);
     char configVers[3];memcpy(configVers,configData+EEPRVERS,2);configVers[3]='\0';
-    Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.print(configLen);Serial.print(" V ");Serial.println(configVers);
+    Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.print(configLen);Serial.print(" V ");Serial.print(configVers[0]);Serial.println(configVers[1]);
     char buf[7];memcpy(buf,concAddr,5);buf[5]='\0';
     Serial.print("MAC  ");dumpstr((char*)macAddr,6);Serial.print("CONC ");dumpstr((char*)concAddr,5);
 
