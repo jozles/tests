@@ -42,6 +42,7 @@ float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_
 void getVT();
 void initConf();
 void testCrc();
+void testSleepPwrDown();
 
 void setup() {  
   
@@ -51,7 +52,11 @@ void setup() {
   Serial.begin(115200);delay(100);
   Serial.println("start");delay(10);
 
+  testSleepPwrDown();
+
   //testCrc();
+
+  adcRead(INADMUXVAL,1,0,0,1); // réveil ADC
 
   initConf();
 }
@@ -60,7 +65,7 @@ void loop(){
 
   Serial.println("\nblink avec delay       O k  S kip  T calibration thermo  V calibration volts  E eprom");
   pinMode(LED,OUTPUT);
-  while(!Serial.available()){digitalWrite(LED,HIGH);delay(500);digitalWrite(LED,LOW);delay(500);}
+  while(!Serial.available()){digitalWrite(LED,HIGH);delay(2000);digitalWrite(LED,LOW);delay(2000);}
   c=Serial.read();Serial.println(c);
 
   switch(c){
@@ -101,18 +106,23 @@ void loop(){
       break;
 
     case 'V':
+    {
       bitSet(PORT_VCHK,BIT_VCHK);bitSet(DDR_VCHK,BIT_VCHK);
       delay(1);
 
       volts=adcRead(VADMUXVAL,1,0,0,20);
-      Serial.print(" adcRead() V ");Serial.println(volts);
+      Serial.print(" adcRead(7) V ");Serial.println(volts);
+
+      float intThSensor=adcRead(INADMUXVAL,1,0,0,20);     
+      float intTh=intThSensor*1100/1024-242-45;                               // see datasheet page 247 
+      Serial.print(" adcRead(int th sensor) ");Serial.print(intThSensor);Serial.print(" internal temp =");Serial.println(intTh);
       
       Serial.print(" valeur référence (");
       for(int k=0;k<(refMaxiV/10-refMiniV/10+1);k++){
         Serial.print(k);Serial.print("=");Serial.print((refMiniV/10+k)/10);if(k<(refMaxiV/10-refMiniV/10)){Serial.print(" ");}
       }
 
-      Serial.print(")? ");
+      Serial.print(") ? ");
       c=getch();while(c>'6' || c<'0'){c=getch();};
       k=(uint8_t)c-(uint8_t)'0';
       
@@ -121,7 +131,7 @@ void loop(){
       Serial.print(" adcRead() V ");Serial.print(volts);Serial.print("   vFactor=");Serial.print(*vFactor*10000);
       getVT();Serial.print("  volt=");Serial.println(volts);
       bitClear(PORT_VCHK,BIT_VCHK);
-
+    }
       break;
       
     case 'E':
@@ -161,7 +171,7 @@ void testSleep(char mode)
   c='\0';
   while(c!='O'){
     switch (mode){
-      case 'I':sleepPwrDown(T2000);break;
+      case 'I':sleepPwrDown(T4000);break;
       case 'E':sleepPwrDown(0);break;
       default: break;
     }      
@@ -170,7 +180,7 @@ void testSleep(char mode)
     for(uint8_t i=0;i<nb;i++){
       digitalWrite(LED,HIGH);delay(200); // sleepPowerDown met le pin Led en entrée
       digitalWrite(LED,LOW);
-      sleepPwrDown(T500);
+      sleepPwrDown(T250);
       hardwarePowerUp();
     }
 
@@ -261,12 +271,13 @@ void initConf()
   delay(10);if(configLength!=CONFIGLEN) {ledblink(BCODECONFIGRECLEN);}
 
   memcpy(configVers,VERSION,2);
-  memcpy(macAddr,MAC,6);
+  memcpy(macAddr,MAC,6);  
   strncpy((char*)concAddr,CONC,5);
   *thFactor=0.1071;
   *thOffset=50;
   *vFactor=0.0057;
   *vOffset=0;
+
 }
 
 void configPrint()
@@ -317,3 +328,18 @@ uint32_t crc2=calcCrc32b((byte*)chaine,48);
 Serial.print("crc2=");Serial.print(crc2);Serial.print("  t2=");Serial.println(micros()-t2);
 while(1){};
 }
+
+void testSleepPwrDown()
+{
+  bitSet(DDR_LED,BIT_LED);
+
+  while(1){
+    for(int i=0;i<10;i++){
+      bitSet(PORT_LED,BIT_LED);
+      delay(5);
+      bitClear(PORT_LED,BIT_LED);
+      delay(1000);
+    }
+    sleepPwrDown(0);  
+  }
+}  

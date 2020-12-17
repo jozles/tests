@@ -1,21 +1,33 @@
 #ifndef HARD_H_INCLUDED
 #define HARD_H_INCLUDED
 
-
+  #define PORT_NRFPWR PORTD
+  #define DDR_NRFPWR  DDRD
+  #define BIT_NRFPWR  7
+  #define PORT_NRFCE  PORTB
+  #define DDR_NRFCE   DDRB
+  #define BIT_NRFCE   1
+  #define PORT_MOSI   PORTB
+  #define DDR_MOSI    DDRB  
+  #define BIT_MOSI    3
+  #define PORT_SPICK  PORTB
+  #define DDR_SPICK   DDRB  
+  #define BIT_SPICK   5
+  #define PORT_VCHK   PORTC
+  #define DDR_VCHK    DDRC
+  #define BIT_VCHK    3
+  #define PORT_DONE   PORTB
+  #define DDR_DONE    DDRB
+  #define BIT_DONE    0
+  #define DONE        8  
   #define PORT_LED    PORTD
   #define DDR_LED     DDRD
   #define BIT_LED     4
   #define LED 4
-  #define PORT_DONE   PORTB
-  #define DDR_DONE    DDRB
-  #define BIT_DONE    0
-  #define DONE        8
-  #define PORT_VCHK   PORTC
-  #define DDR_VCHK    DDRC
-  #define BIT_VCHK    3
 
-  #define VCHECKADC 7             // VOLTS ADC pin Nb
-  #define VADMUXVAL  0 | (1<<REFS1) | (1<<REFS0) | VCHECKADC     // internal 1,1V ref + ADC input for volts
+  #define INADMUXVAL 0 | (1<<REFS1) | (1<<REFS0) | 0x08         // internal 1,1V ref + ADC input for internal temp
+  #define VCHECKADC  7             // VOLTS ADC pin Nb
+  #define VADMUXVAL  0 | (1<<REFS1) | (1<<REFS0) | VCHECKADC    // internal 1,1V ref + ADC input for volts
   //#define VFACTOR 0.00845         // volts conversion 1K+6,8K (MOSFET)
   #define VFACTOR 0.00594         // volts conversion 1,5K+6,8K (MOSFET)
 

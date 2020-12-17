@@ -31,15 +31,15 @@
 
 uint16_t wdtTime[]={16,32,64,125,250,500,1000,2000,4000,8000};   // durées WDT millis
 
-uint8_t       cntTest=0;                         // test watchdog
+uint8_t cntTest=0;              // test watchdog
 
 
-ISR(WDT_vect)                     // ISR interrupt service for MPU INT WDT vector
+ISR(WDT_vect)                   // ISR interrupt service for MPU INT WDT vector
 {
 }
 
 
-void int1_ISR()                    // reed ISR
+void int1_ISR()                 // reed ISR
 {
   sleep_disable();
   detachInterrupt(0);
@@ -60,9 +60,15 @@ void hardwarePowerUp()
 }
 
 
-void hardwarePowerDown()
+void hardwarePowerDown()          // every loaded port pin -> in
 {
   bitClear(DDR_LED,BIT_LED);      //pinMode(LED,INPUT);
+  bitClear(DDR_DONE,BIT_DONE);
+  bitClear(DDR_SPICK,BIT_SPICK);
+  bitClear(DDR_VCHK,BIT_VCHK);  
+  bitClear(DDR_MOSI,BIT_MOSI);
+  bitClear(DDR_NRFCE,BIT_NRFCE);
+  bitClear(DDR_NRFPWR,BIT_NRFPWR);    
 }
 
 
@@ -191,7 +197,7 @@ uint16_t sleepPwrDown(uint8_t durat)  /* *** WARNING *** hardwarePowerUp() not i
      same issue for reed on INT1 which is a rare event (reed to greedy, no more detected by int)
      */
      
-      attachInterrupt(0,int0_ISR,ISREDGE);   // external timer interrupt enable
+      attachInterrupt(0,int0_ISR,ISREDGE);  // external timer interrupt enable
       EIFR=bit(INTF0);                      // clr flag
     }
     //attachInterrupt(1,int1_ISR,CHANGE);   // reed interrupt enable
