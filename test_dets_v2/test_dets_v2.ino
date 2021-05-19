@@ -4,9 +4,11 @@
 #include <shutil2.h>
 #include <shconst2.h>
 
-#define VERSION "01"
+#define VERSION "02"
 #define MAC "peri_"
-#define CONC "ctest"
+#define CONC "ctest"  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<< configurer (ctest intérieur, dtest extérieur)
+
+#define ADDR_LENGTH 5
 
 char c='\0';
 char c1='\0';
@@ -22,7 +24,7 @@ uint8_t k;
 
 Eepr eeprom;
 
-#define CONFIGLEN 37
+#define CONFIGLEN 40 // 37 version 01 38 version 02
 byte    configData[CONFIGLEN];
 
 byte*  configVers;
@@ -32,6 +34,15 @@ float* vFactor;
 float* vOffset;
 byte*  macAddr;
 byte*  concAddr;
+uint8_t* numConc;
+
+bool   pgAuto=false;    // si true pas de saisie, paramétrage automatique ; valoriser kt=3 c='T', kv=4 c='V', c='E' c1='I' c2=n° perif, c='E' c1='L' ;
+int    pg=-1;               // pointeur fonction en cours en mode auto
+#define NBPG 5
+char   cpg[]= {"TVPEE"};
+char   c1pg[]={"   IL"};
+char   c2pg='g';            // ******************** numéro périf *********************
+uint8_t kv=5,kt=3;
 
 char*  chexa="0123456789ABCDEFabcdef\0";
 
@@ -47,12 +58,19 @@ void testSleepPwrDown();
 void setup() {  
   
   bitClear(PORT_VCHK,BIT_VCHK);               //digitalWrite(VCHECK,VCHECKHL);
-  bitSet(DDR_VCHK,BIT_VCHK);                //pinMode(VCHECK,OUTPUT);  
+  bitSet(DDR_VCHK,BIT_VCHK);                  //pinMode(VCHECK,OUTPUT);  
 
   Serial.begin(115200);delay(100);
-  Serial.println("start");delay(10);
+  if(pgAuto){
+    Serial.print("mode automatique ");
+    Serial.print(NBPG);Serial.print(" ");Serial.print(cpg);Serial.print(" kv=");Serial.print(kv);Serial.print(" kt=");Serial.print(kt);Serial.print(" c1=");Serial.print(c1pg);Serial.print(" c2=");Serial.print(c2pg);Serial.print(" ");
+    Serial.println();
+  }
+  Serial.print("start (patienter, sleepPowerDown en test)");delay(10);
 
   testSleepPwrDown();
+
+  Serial.println(" sleepPwrDown ok");delay(10);
 
   //testCrc();
 
@@ -62,12 +80,17 @@ void setup() {
 }
 
 void loop(){  
-
-  Serial.println("\nblink avec delay       O k  S kip  T calibration thermo  V calibration volts  E eprom");
+  Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
+  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb   E eprom");
   pinMode(LED,OUTPUT);
-  while(!Serial.available()){digitalWrite(LED,HIGH);delay(2000);digitalWrite(LED,LOW);delay(2000);}
-  c=Serial.read();Serial.println(c);
 
+  if(!pgAuto){
+    while(!Serial.available()){digitalWrite(LED,HIGH);delay(2000);digitalWrite(LED,LOW);delay(2000);}
+    c=Serial.read();}
+  else {pg++;if(pg>=NBPG){Serial.print("\nterminé");while(1){};}c=cpg[pg];c1=c1pg[pg];c2=c2pg;}
+
+  Serial.println(c);
+  
   switch(c){
     case 'O':
       Serial.print("blink avec sleep interne ");delay(10);testSleep('I');
@@ -94,12 +117,15 @@ void loop(){
       }
 
       Serial.print(")? ");
-      c=getch();while(c>'5' || c<'0'){c=getch();};
-      k=(uint8_t)c-(uint8_t)'0';
-      
+      if(!pgAuto){
+        c=getch();while(c>'5' || c<'0'){c=getch();};
+        kt=(uint8_t)c-(uint8_t)'0';
+      }
+
+      Serial.println(kt);
       temp=adcRead(TADMUXVAL,1,0,0,20);
-      *thFactor=(float)((float)(refMiniT+k)/(float)temp)/10;
-      Serial.print(" adcRead() Th ");Serial.print(temp);Serial.print("  thFactor=");Serial.print(*thFactor*1000);
+      *thFactor=(float)((float)(refMiniT+kt)/(float)temp)/10;
+      Serial.print(" adcRead() Th ");Serial.print(temp);Serial.print("  thFactor=");Serial.print(*thFactor*10000);
       getVT();Serial.print(" temp=");Serial.println(temp);
       bitClear(PORT_VCHK,BIT_VCHK);
 
@@ -123,38 +149,49 @@ void loop(){
       }
 
       Serial.print(") ? ");
-      c=getch();while(c>'6' || c<'0'){c=getch();};
-      k=(uint8_t)c-(uint8_t)'0';
-      
+      if(!pgAuto){
+        c=getch();while(c>'6' || c<'0'){c=getch();};
+        kv=(uint8_t)c-(uint8_t)'0';
+      }
+
+      Serial.println(kv);
       volts=adcRead(VADMUXVAL,1,0,0,20);
-      *vFactor=(float)((float)(((refMiniV/10)+k)*10)/(float)volts)/100;
+      *vFactor=(float)((float)(((refMiniV/10)+kv)*10)/(float)volts)/100;
       Serial.print(" adcRead() V ");Serial.print(volts);Serial.print("   vFactor=");Serial.print(*vFactor*10000);
       getVT();Serial.print("  volt=");Serial.println(volts);
       bitClear(PORT_VCHK,BIT_VCHK);
     }
       break;
+
+    case 'P':
+      Serial.print(" numéro perif ? ");
+      if(!pgAuto){c2=getch();while(c2=='\0'){c2=getch();}}
+      Serial.print(c2);Serial.print(" ");
+      macAddr[4]=c2;macAddr[5]='\0';
+      Serial.println((char*)macAddr);
+
+      Serial.print(" numéro concentrateur (0-3)? ");
+      if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>'3' ){c2=getch();}}
+      Serial.print(c2);Serial.print(" ");
+      *numConc=c2-48;
+      Serial.println(*numConc);
+      break;
       
     case 'E':
       Serial.print("Eeprom ");configPrint();
-      Serial.print("L oad  I nit  P eri nb  S kip ");
+      Serial.print("L oad  R ecord  S kip ");
       
-        c1=getch();while(c1=='\0'){c1=getch();}
+        if(!pgAuto){c1=getch();while(c1=='\0'){c1=getch();}}
+        Serial.println(c1);
         switch(c1){
           case 'L':
             if(!eeprom.load(configData,CONFIGLEN)){Serial.println("****KO******");}
             configPrint();
             break;
-          case 'I':
+          case 'R':
             memcpy(configVers,VERSION,2);
             configPrint();
             eeprom.store(configData,CONFIGLEN);
-            configPrint();
-            break;
-          case 'P':
-            Serial.print(" numéro ? ");
-            c2=getch();while(c2=='\0'){c2=getch();}
-            macAddr[4]=c2;macAddr[5]='\0';
-            Serial.println((char*)macAddr);
             break;
           case 'S':
             break;
@@ -262,22 +299,25 @@ void initConf()
   macAddr=(byte*)temp;
   temp +=6;
   concAddr=(byte*)temp;
-  temp +=6;
+  temp +=ADDR_LENGTH+1;
+  numConc=(uint8_t*)temp;
+  temp +=sizeof(uint8_t);
 
   byte* configEndOfRecord=(byte*)temp;      // doit être le dernier !!!
 
   long configLength=(long)configEndOfRecord-(long)configBegOfRecord+1;  
   Serial.print("CONFIGLEN=");Serial.print(CONFIGLEN);Serial.print("/");Serial.println(configLength);
-  delay(10);if(configLength!=CONFIGLEN) {ledblink(BCODECONFIGRECLEN);}
+  delay(10);if(configLength>CONFIGLEN) {lethalSleep();}
 
   memcpy(configVers,VERSION,2);
   memcpy(macAddr,MAC,6);  
   strncpy((char*)concAddr,CONC,5);
+  *numConc=0;
   *thFactor=0.1071;
   *thOffset=50;
   *vFactor=0.0057;
   *vOffset=0;
-
+  
 }
 
 void configPrint()
@@ -287,12 +327,11 @@ void configPrint()
     Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.print(configLen);Serial.print(" V ");Serial.print(configVers[0]);Serial.println(configVers[1]);
     char buf[7];memcpy(buf,concAddr,5);buf[5]='\0';
     Serial.print("MAC  ");dumpstr((char*)macAddr,6);Serial.print("CONC ");dumpstr((char*)concAddr,5);
+    if(memcmp(configVers,"01",2)!=0);Serial.print("numConc ");dumpstr((char*)numConc,1);
 
     Serial.print("  thFactor=");Serial.print(*thFactor*10000);Serial.print("  thOffset=");Serial.print(*thOffset);   
     Serial.print("   vFactor=");Serial.print(*vFactor*10000);Serial.print("   vOffset=");Serial.println(*vOffset);   
 }
-
-
 
 uint32_t calcCrc32b(byte* data,uint16_t len)
 {
@@ -332,8 +371,6 @@ while(1){};
 void testSleepPwrDown()
 {
   bitSet(DDR_LED,BIT_LED);
-
-  while(1){
     for(int i=0;i<10;i++){
       bitSet(PORT_LED,BIT_LED);
       delay(5);
@@ -341,5 +378,4 @@ void testSleepPwrDown()
       delay(1000);
     }
     sleepPwrDown(0);  
-  }
-}  
+}
