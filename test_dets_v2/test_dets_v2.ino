@@ -1,10 +1,10 @@
 #include "powerSleep.h"
 #include "hard.h"
-#include <eepr.h>
+#include "eepr.h"
 #include <shutil2.h>
 #include <shconst2.h>
 
-#define VERSION "02"
+#define VERSION "03"
 #define MAC "peri_"
 #define CONC "ctest"  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<< configurer (ctest intérieur, dtest extérieur)
 
@@ -16,7 +16,7 @@ char c2='\0';
 float volts=0;                           // tension alim (VCC)
 float temp;
 float refMiniT=747;
-float refMaxiT=753;                      // référence tension étalonage th
+float refMaxiT=753;                      // référence tension étalonnage th
 float refMiniV=350;
 float refMaxiV=410;                      // référence tension étalonage volts
 
@@ -24,7 +24,9 @@ uint8_t k;
 
 Eepr eeprom;
 
-#define CONFIGLEN 40 // 37 version 01 38 version 02
+uint8_t channelTable[]={CHANNEL0,CHANNEL1,CHANNEL2,CHANNEL3};   // canal vs N° conc
+
+#define CONFIGLEN 75 // 37 version 01 // 38 version 02 // 75 version 03
 byte    configData[CONFIGLEN];
 
 byte*  configVers;
@@ -35,6 +37,9 @@ float* vOffset;
 byte*  macAddr;
 byte*  concAddr;
 uint8_t* numConc;
+uint8_t* concChannel;
+uint8_t* concSpeed;
+uint8_t* concPeriParams;
 
 bool   pgAuto=false;    // si true pas de saisie, paramétrage automatique ; valoriser kt=3 c='T', kv=4 c='V', c='E' c1='I' c2=n° perif, c='E' c1='L' ;
 int    pg=-1;               // pointeur fonction en cours en mode auto
@@ -46,6 +51,9 @@ uint8_t kv=5,kt=3;
 
 char*  chexa="0123456789ABCDEFabcdef\0";
 
+bool   extTimer;
+unsigned long t_on=0;
+
 void configPrint();
 char getch();
 void testSleep(char mode);
@@ -54,6 +62,18 @@ void getVT();
 void initConf();
 void testCrc();
 void testSleepPwrDown();
+void int_ISR()
+{
+  extTimer=true;
+  //Serial.println("int_ISR");
+}
+
+void blk(uint16_t durat)
+{
+  bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
+  delay(durat);
+  bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
+}
 
 void setup() {  
   
@@ -66,11 +86,26 @@ void setup() {
     Serial.print(NBPG);Serial.print(" ");Serial.print(cpg);Serial.print(" kv=");Serial.print(kv);Serial.print(" kt=");Serial.print(kt);Serial.print(" c1=");Serial.print(c1pg);Serial.print(" c2=");Serial.print(c2pg);Serial.print(" ");
     Serial.println();
   }
-  Serial.print("start (patienter, sleepPowerDown en test)");delay(10);
+  for(uint8_t i=0;i<5;i++){blk(20);delay(300);}
+  Serial.print("_\n>>> start (patienter, sleepPowerDown en test)");delay(10);
 
-  testSleepPwrDown();
+//  testSleepPwrDown();
+//  Serial.println(" sleepPwrDown ok");delay(10);
 
-  Serial.println(" sleepPwrDown ok");delay(10);
+  sleepPwrDown(0);                        // wait for interrupt from external timer to reach beginning of period
+
+  t_on=millis();
+  blk(500);                             // 1 blk 500mS - external timer calibration begin (100mS blk)
+  
+  attachInterrupt(0,int_ISR,ISREDGE);     // external timer interrupt
+  EIFR=bit(INTF0);                        // clr flag
+  while(!extTimer){delay(1);}             // évite le blocage à la fin ... ???  
+  detachInterrupt(0);
+
+  float period=(float)(millis()-t_on)/1000;
+  Serial.print(" sleepPwrDown ok ");blk(500);                       // 1 blk 500mS - external timer calibration end
+  Serial.print(" period ");Serial.print(period);Serial.println("sec "); // external timer period
+
 
   //testCrc();
 
@@ -82,10 +117,9 @@ void setup() {
 void loop(){  
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
   Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb   E eprom");
-  pinMode(LED,OUTPUT);
 
   if(!pgAuto){
-    while(!Serial.available()){digitalWrite(LED,HIGH);delay(2000);digitalWrite(LED,LOW);delay(2000);}
+    while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);delay(2000);bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);delay(2000);}
     c=Serial.read();}
   else {pg++;if(pg>=NBPG){Serial.print("\nterminé");while(1){};}c=cpg[pg];c1=c1pg[pg];c2=c2pg;}
 
@@ -189,6 +223,9 @@ void loop(){
             configPrint();
             break;
           case 'R':
+            *concChannel=channelTable[*numConc];
+            *concSpeed=0;
+            *concPeriParams=1;
             memcpy(configVers,VERSION,2);
             configPrint();
             eeprom.store(configData,CONFIGLEN);
@@ -215,8 +252,8 @@ void testSleep(char mode)
     hardwarePowerUp();
     uint8_t nb=2;if(mode=='E'){nb=3;}
     for(uint8_t i=0;i<nb;i++){
-      digitalWrite(LED,HIGH);delay(200); // sleepPowerDown met le pin Led en entrée
-      digitalWrite(LED,LOW);
+      bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);delay(200); // sleepPowerDown met le pin Led en entrée
+      bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
       sleepPwrDown(T250);
       hardwarePowerUp();
     }
@@ -302,6 +339,14 @@ void initConf()
   temp +=ADDR_LENGTH+1;
   numConc=(uint8_t*)temp;
   temp +=sizeof(uint8_t);
+  concChannel=(uint8_t*)temp;
+  temp +=sizeof(uint8_t);
+  concSpeed=(uint8_t*)temp;
+  temp +=sizeof(uint8_t);
+  concPeriParams=(uint8_t*)temp;
+  temp +=sizeof(uint8_t);
+
+  temp+=31;                   // dispo
 
   byte* configEndOfRecord=(byte*)temp;      // doit être le dernier !!!
 
@@ -317,7 +362,9 @@ void initConf()
   *thOffset=50;
   *vFactor=0.0057;
   *vOffset=0;
-  
+  *concChannel=0;
+  *concSpeed=0;
+  *concPeriParams=0;
 }
 
 void configPrint()
@@ -331,6 +378,11 @@ void configPrint()
 
     Serial.print("  thFactor=");Serial.print(*thFactor*10000);Serial.print("  thOffset=");Serial.print(*thOffset);   
     Serial.print("   vFactor=");Serial.print(*vFactor*10000);Serial.print("   vOffset=");Serial.println(*vOffset);   
+    Serial.print("(table channels : ");
+    for(uint8_t i=0;i<MAXCONC;i++){Serial.print(i);Serial.print(" ");Serial.print(channelTable[i]);Serial.print("  ");}Serial.println(")");
+    Serial.print("  channel=");Serial.print(*concChannel);Serial.print("  speed=");Serial.print(*concSpeed);
+    Serial.print("  concPeriParams=");Serial.println(*concPeriParams);
+
 }
 
 uint32_t calcCrc32b(byte* data,uint16_t len)
@@ -370,11 +422,12 @@ while(1){};
 
 void testSleepPwrDown()
 {
-  bitSet(DDR_LED,BIT_LED);
     for(int i=0;i<10;i++){
+      bitSet(DDR_LED,BIT_LED);
       bitSet(PORT_LED,BIT_LED);
       delay(5);
       bitClear(PORT_LED,BIT_LED);
+      bitClear(DDR_LED,BIT_LED);
       delay(1000);
     }
     sleepPwrDown(0);  
