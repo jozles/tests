@@ -2,24 +2,30 @@
 //#include <EthernetUdp.h>
 #include <SPI.h>
 
-#define LED 5
+#define LED 13
 
 EthernetClient cli;
 
 
-  byte        host[]={82, 64, 32, 56};
-  int         port  = 1790;
-/*  byte        host[]={64, 233, 187, 99};                      // server IP
-  int         port  = 80;                                     // server port
-*/
-  byte        mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};   // W5500 board  mac addr
-  byte        localIp[] = {192,168,1,30};                     // W5500 board fixed IP
+//  byte        host[]={82, 64, 32, 56};
+  byte        host[]= {192,168,0,36};
+  int         port  = 1786;
 
-#define MAXLEN 2000  
+  byte        mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x00};   // fake Mac for wiznet board
+  byte        localIp[] = {192,168,0,199};                
+
+#define MAXLEN 500  
   char        rxMessage[MAXLEN];
   uint16_t    len;
   int         txStatus,rxStatus;
   uint16_t    cnt=0;
+
+
+void serialPrintIp(uint8_t* ip)
+{
+  for(int i=0;i<4;i++){Serial.print(ip[i]);if(i<3){Serial.print(".");}}
+  //Serial.print(" ");
+}  
 
 int messToServer(EthernetClient* cli,byte* host,int port,char* data)    // connecte au serveur et transfère la data
 {
@@ -73,7 +79,7 @@ int getHttpData(EthernetClient* cli,char* data,uint16_t* len)
       while(millis()<(timerTo+TIMEOUT)){
         if(cli->available()>0){
           timerTo=millis();
-          inch=cli->read();                          // Serial.print(inch);
+          inch=cli->read();Serial.print(inch);
           
             if(pt<*len-1){data[pt]=inch;pt++;}
         }
@@ -97,9 +103,11 @@ void setup() {
   unsigned long t_beg=millis();
   if(Ethernet.begin((uint8_t*)mac) == 0){
     Serial.print("Failed with DHCP... forcing Ip ");
-    Ethernet.begin ((uint8_t*)mac, localIp);
+    serialPrintIp(localIp);Serial.println();
+    Ethernet.begin((uint8_t*)mac, localIp);
     }
-  Serial.print(millis()-t_beg);Serial.print(" ");Serial.println(Ethernet.localIP());
+  
+  Serial.print("localIP=");Serial.println(Ethernet.localIP());
   delay(1000);
 }
 

@@ -1,13 +1,14 @@
+#include <Arduino.h>
 #include "powerSleep.h"
 #include "hard.h"
 #include "eepr.h"
-#include "d:\data\arduino\libraries\nrf\src\nrf24l01s.h"
-#include "d:\data\arduino\libraries\shlib2\src\shconst2.h"
-
+#include <shutil2.h>
+#include <shconst2.h>
 
 #define VERSION "03"
 #define MAC "peri_"
-#define CONC "SHCO3"  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<< configurer 
+#define CONC "SHCO3"  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<< configurer (ctest intérieur, dtest extérieur)
+#define CONCNAMELEN 5
 
 #define ADDR_LENGTH 5
 
@@ -24,6 +25,11 @@ float refMaxiV=410;                      // référence tension étalonage volts
 uint8_t k;
 
 Eepr eeprom;
+
+#define CHANNEL0    120   // radio channel conc0
+#define CHANNEL1    110   // radio channel conc1
+#define CHANNEL2    100   // radio channel conc2
+#define CHANNEL3    90    // radio channel conc3
 
 uint8_t channelTable[]={CHANNEL0,CHANNEL1,CHANNEL2,CHANNEL3};   // canal vs N° conc
 
@@ -50,13 +56,14 @@ char   c1pg[]={"   IL"};
 char   c2pg='g';            // ******************** numéro périf *********************
 uint8_t kv=5,kt=3;
 
-char*  chexa="0123456789ABCDEFabcdef\0";
+//const char*  chexa="0123456789abcdef\0";
 
 bool   extTimer;
 unsigned long t_on=0;
 
 void configPrint();
 char getch();
+char getch(bool cr);
 void testSleep(char mode);
 float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_t dly);      // dly=1 if ADC halted
 void getVT();
@@ -74,58 +81,6 @@ void blk(uint16_t durat)
   bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
   delay(durat);
   bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
-}
-
-void conv_htoa(char* ascii,byte* h)
-{
-    uint8_t c=*h,d=c>>4,e=c&0x0f;
-        ascii[0]=chexa[d];ascii[1]=chexa[e];
-}
-
-void conv_htoa(char* ascii,byte* h,uint8_t len)
-{
-    for(uint8_t i=0;i<len;i++){
-      conv_htoa(ascii+2*(len-i-1),(byte*)(h+i));
-    }
-}
-
-void dumpstr0(char* data,uint8_t len,bool cr)
-{
-    char a[]={0x00,0x00,0x00};
-    uint8_t c;
-    Serial.print("   ");Serial.print((long)data,HEX);Serial.print("   ");
-
-    for(int k=0;k<len;k++){conv_htoa(a,(byte*)&data[k]);Serial.print(a);Serial.print(" ");}
-    Serial.print("    ");
-    for(int k=0;k<len;k++){
-            c=data[k];
-            if(c<32 || c>127){c='.';}
-            Serial.print((char)c);
-    }
-    if(cr){Serial.println();}
-}
-
-void dumpstr(char* data,uint16_t len,bool cr)
-{
-    while(len>=16){len-=16;dumpstr0(data,16,len>0);data+=16;}
-    if(len!=0){dumpstr0(data,len,false);}
-    if(cr){Serial.println();}
-}
-
-void dumpstr(char* data,uint16_t len)
-{
-  return dumpstr(data,len,true);
-}
-
-void dumpfield(char* fd,uint8_t ll)
-{
-    byte a;
-    for(int ff=ll-1;ff>=0;ff--){
-            a=((fd[ff]&0xF0)>>4)+'0';if(a>'9'){a+=7;}Serial.print((char)a);
-            a=(fd[ff]&0x0F)+'0';if(a>'9'){a+=7;}Serial.print((char)a);
-            Serial.print(" ");
-    }
-    Serial.print(" ");
 }
 
 void setup() {  
@@ -157,7 +112,7 @@ void setup() {
 
   float period=(float)(millis()-t_on)/1000;
   Serial.print(" sleepPwrDown ok ");blk(500);                       // 1 blk 500mS - external timer calibration end
-  Serial.print(" period ");Serial.print(period);Serial.println("sec "); // external timer period
+  Serial.print(" period ");Serial.print((int)(period*1000));Serial.println("mSec "); // external timer period
 
 
   //testCrc();
@@ -251,6 +206,7 @@ void loop(){
       break;
 
     case 'P':
+    {
       Serial.print(" numéro perif ? ");
       if(!pgAuto){c2=getch();while(c2=='\0'){c2=getch();}}
       Serial.print(c2);Serial.print(" ");
@@ -262,6 +218,20 @@ void loop(){
       Serial.print(c2);Serial.print(" ");
       *numConc=c2-48;
       Serial.println(*numConc);
+
+      Serial.print(" nom concentrateur ? (ctest,SHCO2 etc) ");
+      char concName[ADDR_LENGTH+1];
+      memset(concName,0x00,ADDR_LENGTH+1);
+      uint8_t k=0;
+      while(k<ADDR_LENGTH-1){
+        concName[k]=getch(false);
+        if(concName[k]!='\0'){k++;}
+      }
+      //for(uint8_t c=0;ADDR_LENGTH;c++){concName[c]=getch(false);}
+      strncpy((char*)concAddr,concName,ADDR_LENGTH);
+      concAddr[ADDR_LENGTH-1]=*numConc+48;
+      Serial.println(); Serial.print("concAddr:");Serial.println((char*)concAddr);
+    }
       break;
       
     case 'E':
@@ -318,18 +288,22 @@ void testSleep(char mode)
   }
 }
 
-char getch()
+char getch(bool cr)
 {
     char c='\0';
     if(Serial.available()){
       c=Serial.read();
-      Serial.println((char)c);delay(1);}
+      Serial.print((char)c);delay(1);
+      if(cr){Serial.println();delay(1);}
+    }
     return c;
 }
 
+char getch()
+{return getch(true);}
+
 void getVT()                     // get unregulated voltage and reset watchdog for external timer period 
 {
-  unsigned long t=micros();
 
   bitSet(PORT_VCHK,BIT_VCHK);               //digitalWrite(VCHECK,VCHECKHL);
   bitSet(DDR_VCHK,BIT_VCHK);                //pinMode(VCHECK,OUTPUT);  
@@ -409,7 +383,7 @@ void initConf()
 
   memcpy(configVers,VERSION,2);
   memcpy(macAddr,MAC,6);  
-  strncpy((char*)concAddr,CONC,5);
+  strncpy((char*)concAddr,CONC,ADDR_LENGTH);
   *numConc=0;
   *thFactor=0.1071;
   *thOffset=50;
@@ -425,9 +399,9 @@ void configPrint()
     uint16_t configLen;memcpy(&configLen,configData+EEPRLENGTH,2);
     char configVers[3];memcpy(configVers,configData+EEPRVERS,2);configVers[3]='\0';
     Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.print(configLen);Serial.print(" V ");Serial.print(configVers[0]);Serial.println(configVers[1]);
-    char buf[7];memcpy(buf,concAddr,5);buf[5]='\0';
+    char buf[7];memcpy(buf,concAddr,ADDR_LENGTH);buf[ADDR_LENGTH]='\0';
     Serial.print("MAC  ");dumpstr((char*)macAddr,6);Serial.print("CONC ");dumpstr((char*)concAddr,5);
-    if(memcmp(configVers,"01",2)!=0);Serial.print("numConc ");dumpstr((char*)numConc,1);
+    if(memcmp(configVers,"01",2)!=0){Serial.print("numConc ");dumpstr((char*)numConc,1);}
 
     Serial.print("  thFactor=");Serial.print(*thFactor*10000);Serial.print("  thOffset=");Serial.print(*thOffset);   
     Serial.print("   vFactor=");Serial.print(*vFactor*10000);Serial.print("   vOffset=");Serial.println(*vOffset);   

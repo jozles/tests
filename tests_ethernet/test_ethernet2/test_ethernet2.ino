@@ -130,6 +130,6 @@ void loop() {
     }
     
     cli.stop();
-    delay(1000);
+    delay(4000);
  
 }
