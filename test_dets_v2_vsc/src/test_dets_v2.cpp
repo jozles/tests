@@ -1,11 +1,16 @@
 #include <Arduino.h>
-#include "powerSleep.h"
-#include "hard.h"
+
+#define MACHINE_328
+
+//#include "hard.h"
+#include "radio_const.h"
+#include "lpavr_powerSleep.h"
+#include "lpavr_util.h"
 #include "eepr.h"
 #include <shutil2.h>
 #include <shconst2.h>
 
-#define VERSION "03"
+#define TVERSION "03"
 #define MAC "peri_"
 #define CONC "SHCO3"  // <<<<<<<<<<<<<<<<<<<<<<<<<<<<< configurer (ctest intérieur, dtest extérieur)
 #define CONCNAMELEN 5
@@ -15,12 +20,12 @@
 char c='\0';
 char c1='\0';
 char c2='\0';
-float volts=0;                           // tension alim (VCC)
+float voltage=0;                           // tension alim (VCC)
 float temp;
 float refMiniT=747;
 float refMaxiT=753;                      // référence tension étalonnage th
 float refMiniV=350;
-float refMaxiV=410;                      // référence tension étalonage volts
+float refMaxiV=410;                      // référence tension étalonage voltage
 
 uint8_t k;
 
@@ -81,6 +86,24 @@ void blk(uint16_t durat)
   bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
   delay(durat);
   bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
+}
+
+ 
+void hardwarePowerUp()
+{
+  bitSet(DDR_LED,BIT_LED);        //pinMode(LED,OUTPUT);
+}
+
+void hardwarePowerDown_()          // every loaded port pin -> in
+{
+  //bitClear(DDR_LED,BIT_LED);      //pinMode(LED,INPUT);
+  bitClear(DDR_DONE,BIT_DONE);
+  bitClear(DDR_CLK,BIT_CLK);
+  //bitClear(DDR_VCHK,BIT_VCHK);  
+  bitClear(DDR_MOSI,BIT_MOSI);
+  bitClear(DDR_CE,BIT_CE);
+  bitClear(DDR_RPOW,BIT_RPOW);
+  bitClear(DDR_REED,BIT_REED);            //pinMode(REED,INPUT);    
 }
 
 void setup() {  
@@ -147,7 +170,7 @@ void loop(){
 
     case 'S':
       getVT();
-      Serial.print(" voltage ");Serial.print(volts);getVT();Serial.print(" voltage ");Serial.print(volts);
+      Serial.print(" voltage ");Serial.print(voltage);getVT();Serial.print(" voltage ");Serial.print(voltage);
       Serial.print(" thFactor=");Serial.print((float)*thFactor*1000);
       Serial.print(" temp ");Serial.println(temp);
       break;
@@ -184,8 +207,8 @@ void loop(){
       bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);
       delay(1);
 
-      volts=adcRead(VADMUXVAL,1,0,0,20);
-      Serial.print(" adcRead(7) V ");Serial.println(volts);
+      voltage=adcRead(VADMUXVAL,1,0,0,20);
+      Serial.print(" adcRead(7) V ");Serial.println(voltage);
 
       float intThSensor=adcRead(INADMUXVAL,1,0,0,20);     
       float intTh=intThSensor*1100/1024-242-45;                               // see datasheet page 247 
@@ -203,10 +226,10 @@ void loop(){
       }
 
       Serial.println(kv);
-      volts=adcRead(VADMUXVAL,1,0,0,20);
-      *vFactor=(float)((float)(((refMiniV/10)+kv)*10)/(float)volts)/100;
-      Serial.print(" adcRead() V ");Serial.print(volts);Serial.print("   vFactor=");Serial.print(*vFactor*10000);
-      getVT();Serial.print("  volt=");Serial.println(volts);
+      voltage=adcRead(VADMUXVAL,1,0,0,20);
+      *vFactor=(float)((float)(((refMiniV/10)+kv)*10)/(float)voltage)/100;
+      Serial.print(" adcRead() V ");Serial.print(voltage);Serial.print("   vFactor=");Serial.print(*vFactor*10000);
+      getVT();Serial.print("  volt=");Serial.println(voltage);
       bitClear(PORT_VCHK,BIT_VCHK);
     }
       break;
@@ -250,7 +273,7 @@ void loop(){
       while(1){
         sleepPwrDown(0);sleepPwrDown(T500);digitalWrite(LED,HIGH);sleepPwrDown(T500);digitalWrite(LED,LOW);
         bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);sleepPwrDown(T500);bitClear(PORT_VCHK,BIT_VCHK);
-        bitSet(DDR_NRFPWR,BIT_NRFPWR);bitClear(PORT_NRFPWR,BIT_NRFPWR);delay(100);bitSet(PORT_NRFPWR,BIT_NRFPWR);
+        bitSet(DDR_RPOW,BIT_RPOW);bitClear(PORT_RPOW,BIT_RPOW);delay(100);bitSet(PORT_RPOW,BIT_RPOW);
       }
       
       break;
@@ -270,7 +293,7 @@ void loop(){
             *concChannel=channelTable[*numConc];
             *concSpeed=0;
             *concPeriParams=1;
-            memcpy(configVers,VERSION,2);
+            memcpy(configVers,TVERSION,2);
             configPrint();
             eeprom.store(configData,CONFIGLEN);
             break;
@@ -329,7 +352,7 @@ void getVT()                     // get unregulated voltage and reset watchdog f
   bitSet(PORT_VCHK,BIT_VCHK);               //digitalWrite(VCHECK,VCHECKHL);
   bitSet(DDR_VCHK,BIT_VCHK);                //pinMode(VCHECK,OUTPUT);  
   
-  volts=adcRead(VADMUXVAL,*vFactor,0,0,1);
+  voltage=adcRead(VADMUXVAL,*vFactor,0,0,1);
   delayMicroseconds(1000);                  // MCP9700 stabilize
   temp=adcRead(TADMUXVAL,*thFactor,*thOffset,0,1);
 
@@ -349,7 +372,7 @@ void getVT()                     // get unregulated voltage and reset watchdog f
   ADCSRA &= ~(1<<ADEN);                   // ADC shutdown for clean next voltage measurement
 }
 
-float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_t dly)      // dly=1 if ADC halted
+/*float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_t dly)      // dly=1 if ADC halted
 {
     uint16_t a=0;
     
@@ -363,7 +386,7 @@ float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_
     a+=ADCH*256;
 
     return (float)(a*factor-(offset))+ref;
-}
+}*/
 
 void initConf()
 {
@@ -402,7 +425,7 @@ void initConf()
   Serial.print("CONFIGLEN=");Serial.print(CONFIGLEN);Serial.print("/");Serial.println(configLength);
   delay(10);if(configLength>CONFIGLEN) {lethalSleep();}
 
-  memcpy(configVers,VERSION,2);
+  memcpy(configVers,TVERSION,2);
   memcpy(macAddr,MAC,6);  
   strncpy((char*)concAddr,CONC,ADDR_LENGTH);
   *numConc=0;
