@@ -278,17 +278,17 @@ void loop(){
       break;
       
     case 'X':{
-      k=0;
+      k=8;
       int32_t timings[]={8000,4000,2000,1000,500,250,125,64,32};
       Serial.println("check TXXX (reset pour sortir ; pulse sur 5)");delay(5);
       while(1){
-        if(k==0){k=8;markerL(MARKER);}
-        else {marker(MARKER);}
+        k--;
         Serial.println(timings[k]+1);
-        blk(20);marker(MARKER);
+        blk(4);marker(MARKER);
         sleepDly(timings[k]+1);
         //sleepDly(2001);
-        k--;
+        if(k==0){k=8;markerL(MARKER);}
+        else {marker(MARKER);}
       }
     }break;
 
