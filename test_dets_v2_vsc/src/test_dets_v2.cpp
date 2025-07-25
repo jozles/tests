@@ -147,15 +147,15 @@ void setup() {
 
 void loop(){  
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
-  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  E eprom");
+  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  X tempo  E eprom");
 
   if(!pgAuto){
     while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
       delay(2000);
       //sleepPwrDown(T2000);
       bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
-      //delay(2000);
-      sleepPwrDown(T2000);  
+      delay(2000);
+      //sleepPwrDown(T2000);  
     }
     c=Serial.read();}
   else {pg++;if(pg>=NBPG){Serial.print("\nterminé");while(1){};}c=cpg[pg];c1=c1pg[pg];c2=c2pg;}
@@ -274,10 +274,24 @@ void loop(){
         sleepPwrDown(0);sleepPwrDown(T500);digitalWrite(LED,HIGH);sleepPwrDown(T500);digitalWrite(LED,LOW);
         bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);sleepPwrDown(T500);bitClear(PORT_VCHK,BIT_VCHK);
         bitSet(DDR_RPOW,BIT_RPOW);bitClear(PORT_RPOW,BIT_RPOW);delay(100);bitSet(PORT_RPOW,BIT_RPOW);
-      }
-      
+      } 
       break;
       
+    case 'X':{
+      k=0;
+      int32_t timings[]={8000,4000,2000,1000,500,250,125,64,32};
+      Serial.println("check TXXX (reset pour sortir ; pulse sur 5)");delay(5);
+      while(1){
+        if(k==0){k=8;markerL(MARKER);}
+        else {marker(MARKER);}
+        Serial.println(timings[k]+1);
+        blk(20);marker(MARKER);
+        sleepDly(timings[k]+1);
+        //sleepDly(2001);
+        k--;
+      }
+    }break;
+
     case 'E':
       Serial.print("Eeprom ");configPrint();
       Serial.print("L oad  R ecord  S kip ");
