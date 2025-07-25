@@ -1,6 +1,8 @@
 #ifndef HARD_H_INCLUDED
 #define HARD_H_INCLUDED
 
+  #define MACHINE_DET328
+
   #define PORT_NRFPWR PORTD
   #define DDR_NRFPWR  DDRD
   #define BIT_NRFPWR  7

@@ -124,10 +124,16 @@ void setup() {
 
 void loop(){  
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
-  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb   E eprom");
+  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  E eprom");
 
   if(!pgAuto){
-    while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);delay(2000);bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);delay(2000);}
+    while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
+      delay(2000);
+      //sleepPwrDown(T2000);
+      bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
+      //delay(2000);
+      sleepPwrDown(T2000);  
+    }
     c=Serial.read();}
   else {pg++;if(pg>=NBPG){Serial.print("\nterminé");while(1){};}c=cpg[pg];c1=c1pg[pg];c2=c2pg;}
 
@@ -175,7 +181,7 @@ void loop(){
 
     case 'V':
     {
-      bitSet(PORT_VCHK,BIT_VCHK);bitSet(DDR_VCHK,BIT_VCHK);
+      bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);
       delay(1);
 
       volts=adcRead(VADMUXVAL,1,0,0,20);
@@ -232,6 +238,21 @@ void loop(){
       concAddr[ADDR_LENGTH-1]=*numConc+48;
       Serial.println(); Serial.print("concAddr:");Serial.println((char*)concAddr);
     }
+      break;
+
+    case 'C':
+      Serial.println("Conso (brancher PPK / débrancher Serial après Start)");
+      Serial.println("wait_tpl,sleepPwrDown(0),sleepPwrDown(500),sleepPowerDown(500)+led,sleepPowerDown(500)+pwr_th,Powon_Nrf(100)");
+      Serial.println("S start (rebrancher Serial et reset pour sortir)");
+      c='\0';
+      while(c!='S' && c!='s'){while(!Serial.available()){};c=Serial.read();}Serial.println();delay(1);
+
+      while(1){
+        sleepPwrDown(0);sleepPwrDown(T500);digitalWrite(LED,HIGH);sleepPwrDown(T500);digitalWrite(LED,LOW);
+        bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);sleepPwrDown(T500);bitClear(PORT_VCHK,BIT_VCHK);
+        bitSet(DDR_NRFPWR,BIT_NRFPWR);bitClear(PORT_NRFPWR,BIT_NRFPWR);delay(100);bitSet(PORT_NRFPWR,BIT_NRFPWR);
+      }
+      
       break;
       
     case 'E':

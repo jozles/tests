@@ -62,13 +62,13 @@ void hardwarePowerUp()
 
 void hardwarePowerDown()          // every loaded port pin -> in
 {
-  bitClear(DDR_LED,BIT_LED);      //pinMode(LED,INPUT);
+  //bitClear(DDR_LED,BIT_LED);      //pinMode(LED,INPUT);
   bitClear(DDR_DONE,BIT_DONE);
   bitClear(DDR_SPICK,BIT_SPICK);
-  bitClear(DDR_VCHK,BIT_VCHK);  
+  //bitClear(DDR_VCHK,BIT_VCHK);  
   bitClear(DDR_MOSI,BIT_MOSI);
   bitClear(DDR_NRFCE,BIT_NRFCE);
-  bitClear(DDR_NRFPWR,BIT_NRFPWR);    
+  //bitClear(DDR_NRFPWR,BIT_NRFPWR);    
 }
 
 
