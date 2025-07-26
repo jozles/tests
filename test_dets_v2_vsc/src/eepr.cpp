@@ -1,3 +1,5 @@
+#include "eepr.h"
+#include "shutil2.h"
 
 #ifndef DUE
   #include "EEPROM.h"
@@ -6,12 +8,6 @@
   #include "DueFlashStorage.h"
   DueFlashStorage dFS;
 #endif // DUE
-
-#include "eepr.h"
-#include "shutil2.h"
-
-
-
 
 Eepr::Eepr()
 {
@@ -45,17 +41,15 @@ bool Eepr::checkCrc32(byte* data,uint16_t len,uint32_t crc32)
 
 void Eepr::eeread(byte* data,uint16_t length,uint16_t addr)
 {
-  //Serial.print("eeread ");Serial.print(length);Serial.print(" at ");Serial.println(addr);
     length&=0x00ff; // maxi 256
     for(uint8_t i=0;i<length;i++){
 #ifndef DUE
-        data[i] = EEPROM.read(addr+i);}
+        data[i] = EEPROM.read(addr+i);
 #endif // DUE
 #ifdef DUE
-        data[i] = dFS.read(addr+i);}
+        data[i] = dFS.read(addr+i);
 #endif // DUE
-
-  //dumpstr((char*)data,length);
+    }
 }
 
 void Eepr::eewrite(byte* data,uint16_t length,uint16_t addr)
@@ -63,11 +57,12 @@ void Eepr::eewrite(byte* data,uint16_t length,uint16_t addr)
     length&=0x00ff; // maxi 256
     for(uint8_t i=0;i<length;i++){
 #ifndef DUE
-        EEPROM.update(addr+i,data[i]);}
+        EEPROM.update(addr+i,data[i]);
 #endif // DUE
 #ifdef DUE
-        dFS.write(addr+i,data[i]);}
+        dFS.write(addr+i,data[i]);
 #endif // DUE
+    }
 }
 
 void Eepr::store(byte* data,uint16_t length)
@@ -81,15 +76,27 @@ void Eepr::store(byte* data,uint16_t length)
 
 bool Eepr::load(byte* data,uint16_t length)
 {
-  byte header[EEPRHEADERLENGTH];
+  byte header[EEPRHEADERLENGTH];memset(header,0x00,EEPRHEADERLENGTH);
     if(length<EEPRHEADERLENGTH) {return false;}
-    eeread(header,EEPRHEADERLENGTH,0);                              // lit header
+    eeread(header,EEPRHEADERLENGTH,0);
     uint16_t usefullLength;
-    memcpy(&usefullLength,header+EEPRCRCLENGTH,EEPRLENGTHLENGTH);   // recup longueur-crc
-    usefullLength &= 0x00ff; // 256 bytes max
-//    Serial.print("usefullLength=");Serial.print(usefullLength);Serial.print(" data length=");Serial.println(length);
-    if(length<usefullLength) {return false;}
+    //memcpy(&usefullLength,&header[EEPRCRCLENGTH],EEPRLENGTHLENGTH);   // recup longueur-crc
+    usefullLength=header[5]*256+header[4];
 
+    //Serial.print(header[5],HEX);Serial.print(' ');Serial.println(header[4],HEX);
+   
+    Serial.print(header[4]>>4,HEX);Serial.print(header[4]&0x0f,HEX);Serial.print(" ");
+    Serial.print(header[5]>>4,HEX);Serial.print(header[5]&0x0f,HEX);Serial.println(" ");
+
+    for(uint8_t i=0;i<8;i++){
+      Serial.print(header[i]>>4,HEX);Serial.print(header[i]&0x0f,HEX);Serial.print(" ");
+    }Serial.println("  ");
+
+    usefullLength &= 0x00ff; // 256 bytes max
+    usefullLength = 0x004B;
+    //Serial.print("usefullLength=");Serial.print(usefullLength);Serial.print(" data length=");Serial.println(length);
+    if(length<usefullLength) {return false;}
+    //Serial.print(" UL:");Serial.println(usefullLength);
     eeread(data,usefullLength,0);                                   // charge tout
     uint32_t crc32;
     memcpy(&crc32,data,EEPRCRCLENGTH);

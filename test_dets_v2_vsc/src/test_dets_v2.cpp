@@ -297,7 +297,7 @@ void loop(){
       Serial.print("L oad  R ecord  S kip ");
       
         if(!pgAuto){c1=getch();while(c1=='\0'){c1=getch();}}
-        Serial.println(c1);
+        //Serial.println(c1);
         switch(c1){
           case 'L':
             if(!eeprom.load(configData,CONFIGLEN)){Serial.println("****KO******");}

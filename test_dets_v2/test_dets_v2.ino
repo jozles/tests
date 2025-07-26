@@ -1,7 +1,7 @@
 #include "powerSleep.h"
 #include "hard.h"
 #include "eepr.h"
-#include "d:\data\arduino\libraries\nrf\src\nrf24l01s.h"
+//#include "d:\data\arduino\libraries\nrf\src\nrf24l01s.h"
 #include "d:\data\arduino\libraries\shlib2\src\shconst2.h"
 
 
@@ -25,7 +25,8 @@ uint8_t k;
 
 Eepr eeprom;
 
-uint8_t channelTable[]={CHANNEL0,CHANNEL1,CHANNEL2,CHANNEL3};   // canal vs N° conc
+//uint8_t channelTable[]={CHANNEL0,CHANNEL1,CHANNEL2,CHANNEL3};   // canal vs N° conc
+uint8_t channelTable[]={120,110,100,90};   // canal vs N° conc
 
 #define CONFIGLEN 75 // 37 version 01 // 38 version 02 // 75 version 03
 byte    configData[CONFIGLEN];
