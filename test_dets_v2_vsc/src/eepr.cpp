@@ -76,28 +76,17 @@ void Eepr::store(byte* data,uint16_t length)
 
 bool Eepr::load(byte* data,uint16_t length)
 {
-  byte header[EEPRHEADERLENGTH];memset(header,0x00,EEPRHEADERLENGTH);
+  volatile byte header[EEPRHEADERLENGTH];memset((byte*)header,0x00,EEPRHEADERLENGTH);
     if(length<EEPRHEADERLENGTH) {return false;}
-    eeread(header,EEPRHEADERLENGTH,0);
+
+    eeread((byte*)header,EEPRHEADERLENGTH,0);
     uint16_t usefullLength;
     //memcpy(&usefullLength,&header[EEPRCRCLENGTH],EEPRLENGTHLENGTH);   // recup longueur-crc
-    usefullLength=header[5]*256+header[4];
-
-    //Serial.print(header[5],HEX);Serial.print(' ');Serial.println(header[4],HEX);
-   
-    Serial.print(header[4]>>4,HEX);Serial.print(header[4]&0x0f,HEX);Serial.print(" ");
-    Serial.print(header[5]>>4,HEX);Serial.print(header[5]&0x0f,HEX);Serial.println(" ");
-
-    for(uint8_t i=0;i<8;i++){
-      Serial.print(header[i]>>4,HEX);Serial.print(header[i]&0x0f,HEX);Serial.print(" ");
-    }Serial.println("  ");
-
+    usefullLength=header[EEPRCRCLENGTH+1]*256+header[EEPRCRCLENGTH];    // recup longueur
     usefullLength &= 0x00ff; // 256 bytes max
-    usefullLength = 0x004B;
-    //Serial.print("usefullLength=");Serial.print(usefullLength);Serial.print(" data length=");Serial.println(length);
     if(length<usefullLength) {return false;}
-    //Serial.print(" UL:");Serial.println(usefullLength);
-    eeread(data,usefullLength,0);                                   // charge tout
+
+    eeread(data,usefullLength,0);                                       // charge tout
     uint32_t crc32;
     memcpy(&crc32,data,EEPRCRCLENGTH);
     return checkCrc32(data+EEPRCRCLENGTH,usefullLength-EEPRCRCLENGTH,crc32);
