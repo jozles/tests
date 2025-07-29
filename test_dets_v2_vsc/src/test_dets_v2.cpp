@@ -53,6 +53,10 @@ uint8_t* concChannel;
 uint8_t* concSpeed;
 uint8_t* concPeriParams;
 
+extern int16_t sleepTimings[];
+extern int32_t realSleepTimings[];
+extern int32_t loopSleepTimings[];
+
 bool   pgAuto=false;    // si true pas de saisie, paramétrage automatique ; valoriser kt=3 c='T', kv=4 c='V', c='E' c1='I' c2=n° perif, c='E' c1='L' ;
 int    pg=-1;               // pointeur fonction en cours en mode auto
 #define NBPG 5
@@ -278,18 +282,37 @@ void loop(){
       break;
       
     case 'X':{
-      k=8;
-      int32_t timings[]={8000,4000,2000,1000,500,250,125,64,32};
-      Serial.println("check TXXX (reset pour sortir ; pulse sur 5)");delay(5);
-      while(1){
+      uint8_t k=NB_PRESCALER_VALUES;
+      int32_t slpt;
+      uint32_t t_on[k],t_off[k],t_on1,t_off1,t_on2,t_off2,t_on3,t_off3;
+      
+      bitSet(DDR_DIG1,BIT_DIG1);
+
+      Serial.println("check TXXX (pulse sur 5)");delay(5);
+      while(k>=0){
+        t_on[k]=micros();
+        bitSet(PORT_DIG1,MARKER);
+        sleepPwrDownV((realSleepTimings[k])/100,&slpt);
+        bitClear(PORT_DIG1,MARKER);
+        t_off[k]=micros();
         k--;
-        Serial.println(timings[k]+1);
-        blk(4);marker(MARKER);
-        sleepDly(timings[k]+1);
-        //sleepDly(2001);
-        if(k==0){k=8;markerL(MARKER);}
-        else {marker(MARKER);}
       }
+      k=0;
+      t_on1=micros();
+      bitSet(PORT_DIG1,MARKER);
+      sleepPwrDownV((realSleepTimings[k]+realSleepTimings[k+1]+realSleepTimings[k+2])/100,&slpt);
+      bitClear(PORT_DIG1,MARKER);
+      t_off1=micros();
+      delayMicroseconds(100);
+      t_on2=micros();
+      bitSet(PORT_DIG1,MARKER);
+      sleepPwrDownV(10,&slpt);
+      bitClear(PORT_DIG1,MARKER);
+      t_off2=micros();
+
+
+for(k=0;k<NB_PRESCALER_VALUES;k++){Serial.print(k);Serial.print(':');Serial.print(t_off[k]-t_on[k]);Serial.println("  ");}
+Serial.print(t_off1-t_on1);Serial.print(' ');Serial.print(t_off2-t_on2);Serial.println();
     }break;
 
     case 'E':
