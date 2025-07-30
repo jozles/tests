@@ -282,13 +282,22 @@ void loop(){
       break;
       
     case 'X':{
-      uint8_t k=NB_PRESCALER_VALUES;
+      int8_t k=NB_PRESCALER_VALUES;
       int32_t slpt;
       uint32_t t_on[k],t_off[k],t_on1,t_off1,t_on2,t_off2,t_on3,t_off3;
-      
-      bitSet(DDR_DIG1,BIT_DIG1);
 
-      Serial.println("check TXXX (pulse sur 5)");delay(5);
+      Serial.println("check TXXX (pulse sur 5)");delay(4);
+
+      bitSet(DDR_DIG1,BIT_DIG1);
+      bitClear(PORT_DIG1,MARKER);
+      delay(1);
+
+      t_on2=micros();                   // boucle vide
+      bitSet(PORT_DIG1,MARKER);
+      sleepPwrDownV(10,&slpt);
+      bitClear(PORT_DIG1,MARKER);
+      t_off2=micros();
+
       while(k>=0){
         t_on[k]=micros();
         bitSet(PORT_DIG1,MARKER);
@@ -297,23 +306,18 @@ void loop(){
         t_off[k]=micros();
         k--;
       }
+      
       k=0;
       t_on1=micros();
       bitSet(PORT_DIG1,MARKER);
       sleepPwrDownV((realSleepTimings[k]+realSleepTimings[k+1]+realSleepTimings[k+2])/100,&slpt);
       bitClear(PORT_DIG1,MARKER);
       t_off1=micros();
-      delayMicroseconds(100);
-      t_on2=micros();
-      bitSet(PORT_DIG1,MARKER);
-      sleepPwrDownV(10,&slpt);
-      bitClear(PORT_DIG1,MARKER);
-      t_off2=micros();
+      delayMicroseconds(100);    
 
-
-for(k=0;k<NB_PRESCALER_VALUES;k++){Serial.print(k);Serial.print(':');Serial.print(t_off[k]-t_on[k]);Serial.println("  ");}
-Serial.print(t_off1-t_on1);Serial.print(' ');Serial.print(t_off2-t_on2);Serial.println();
-    }break;
+    for(k=0;k<NB_PRESCALER_VALUES;k++){Serial.print(k);Serial.print(':');Serial.print(t_off[k]-t_on[k]);Serial.print("  ");}
+    Serial.print(t_off1-t_on1);Serial.print(' ');Serial.print(t_off2-t_on2);Serial.println();
+    };break;
 
     case 'E':
       Serial.print("Eeprom ");configPrint();
