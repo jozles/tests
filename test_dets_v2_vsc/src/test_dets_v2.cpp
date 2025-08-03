@@ -5,7 +5,7 @@
 //#include "hard.h"
 #include "radio_const.h"
 #include "lpavr_powerSleep.h"
-#include "lpavr_util.h"
+//#include "lpavr_util.h"
 #include "eepr.h"
 #include <shutil2.h>
 #include <shconst2.h>
@@ -26,6 +26,8 @@ float refMiniT=747;
 float refMaxiT=753;                      // référence tension étalonnage th
 float refMiniV=350;
 float refMaxiV=410;                      // référence tension étalonage voltage
+
+bool toggle=0;
 
 uint8_t k;
 
@@ -85,6 +87,19 @@ void int_ISR()
   //Serial.println("int_ISR");
 }
 
+ISR(TIMER2_COMPA_vect){       //timer2 interrupt toggles MARKER
+  //if(!PORT_DIG1&(1<<MARKER)){bitSet(PORT_DIG1,MARKER);}
+  //else {bitClear(PORT_DIG1,MARKER);}
+    if (toggle){
+    digitalWrite(MARKER,HIGH);
+    toggle = 0;
+  }
+  else{
+    digitalWrite(MARKER,LOW);
+    toggle = 1;
+  }
+}
+
 void blk(uint16_t durat)
 {
   bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
@@ -112,6 +127,9 @@ void hardwarePowerDown_()          // every loaded port pin -> in
 
 void setup() {  
   
+  bitSet(DDR_DIG1,MARKER);bitClear(PORT_DIG1,MARKER);
+  bitSet(DDR_DIG2,MARKER2);bitClear(PORT_DIG2,MARKER2);
+
   bitClear(PORT_VCHK,BIT_VCHK);               //digitalWrite(VCHECK,VCHECKHL);
   bitSet(DDR_VCHK,BIT_VCHK);                  //pinMode(VCHECK,OUTPUT);  
 
@@ -122,13 +140,12 @@ void setup() {
     Serial.println();
   }
   for(uint8_t i=0;i<5;i++){blk(20);delay(300);}
-  Serial.print("_\n>>> start (patienter, sleepPowerDown en test)");delay(10);
-
-//  testSleepPwrDown();
-//  Serial.println(" sleepPwrDown ok");delay(10);
+  Serial.print("_\n>>> start ");
+  
+  /*
+  Serial.print(" patienter, sleepPowerDown en test)");delay(2);
 
   sleepPwrDown(0);                        // wait for interrupt from external timer to reach beginning of period
-
   t_on=millis();
   blk(500);                             // 1 blk 500mS - external timer calibration begin (100mS blk)
   
@@ -140,7 +157,7 @@ void setup() {
   float period=(float)(millis()-t_on)/1000;
   Serial.print(" sleepPwrDown ok ");blk(500);                       // 1 blk 500mS - external timer calibration end
   Serial.print(" period ");Serial.print((int)(period*1000));Serial.println("mSec "); // external timer period
-
+*/
 
   //testCrc();
 
@@ -151,7 +168,7 @@ void setup() {
 
 void loop(){  
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
-  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  X tempo  E eprom");
+  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  X tempo  E eprom  Y/y counters test");
 
   if(!pgAuto){
     while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
@@ -284,7 +301,7 @@ void loop(){
     case 'X':{
       int8_t k=NB_PRESCALER_VALUES;
       int32_t slpt;
-      uint32_t t_on[k],t_off[k],t_on1,t_off1,t_on2,t_off2,t_on3,t_off3;
+      uint32_t t_on[k],t_off[k],t_on1,t_off1,t_on2,t_off2;
 
       Serial.println("check TXXX (pulse sur 5)");delay(4);
 
@@ -343,10 +360,145 @@ void loop(){
           default:break;
         }
       break;
+
+    case 'Y':{
+        uint8_t q0,q1,q2,q3,q4,q5,q6;
+        #define MAXQ 64
+        uint8_t q[MAXQ];
+        unsigned long t[MAXQ];
+
+        bitClear(PORT_DIG1,MARKER);
+        bitSet(PORT_DIG2,MARKER2);delay(100);bitClear(PORT_DIG2,MARKER2);
+        Serial.print("T2 counter tests (y to disable int)");delay(4);
+      
+#define TCNT2_VALUE 0x11111111  // 128 counts 64mS @1024/8Mhz
+
+        TCCR2A=0x00000000;
+        //TCCR2B=0x00000100;  // prescale 1024 (8KHz@8Mhz)
+        TCCR2B |= 0x00000111;  // prescale 1024 (8KHz@8Mhz)
+        TCNT2 |=TCNT2_VALUE;  
+        //OCR2A =0x00000000;
+        //OCR2B =0x00000000;
+        //TIMSK2=0x00000000;  // | !OCIE2B | !OCIE2A | !TOIE2 ; // no interrupt
+        //TIFR2 |=0x00000111;  // no interrupt
+        //ASSR  =0x00000000;  // internal clk
+        //GTCCR =0x00000000;
+
+        Serial.print('!');delay(1);
+        bitSet(PORT_DIG1,MARKER);
+
+        /*
+        q0=TCNT2;
+        q1=TIFR2;
+        Serial.print(q0,HEX);Serial.print('-');Serial.print(q1,HEX);Serial.print(' ');
+        TIFR2=0x00000111;
+        q0=TCNT2;
+        q1=TIFR2;
+        Serial.print(q0,HEX);Serial.print('-');Serial.print(q1,HEX);Serial.print(' ');
+        TIFR2=0x00000111;
+        q0=TCNT2;
+        q1=TIFR2;
+        Serial.print(q0,HEX);Serial.print('-');Serial.print(q1,HEX);Serial.println(' ');
+        TIFR2=0x00000111;
+               
+        q0=TCNT2;q1=TCNT2;q2=TCNT2;q3=TCNT2;q4=TCNT2;q5=TCNT2;q6=TCNT2;
+        Serial.print(q0,HEX);Serial.print('_');Serial.print(q1,HEX);Serial.print('_');
+        Serial.print(q2,HEX);Serial.print('_');Serial.print(q3,HEX);Serial.print('_');
+        Serial.print(q4,HEX);Serial.print('_');Serial.print(q5,HEX);Serial.print('_');
+        Serial.println(q6,HEX);
+        */
+
+        unsigned long t0=micros();
+        uint8_t x=0;
+        for(x=0;x<MAXQ;x++){q[x]=TCNT2;t[x]=micros();}
+        unsigned long t1=micros();
+        for(x=0;x<MAXQ;x++){Serial.print(q[x],HEX);Serial.print('/');Serial.print(t[x]);Serial.print('-');}
+        Serial.println();Serial.print((t1-t0)/(q[MAXQ-1]-q[0]));Serial.println("uS");
+
+        /*
+
+          uint8_t v=0;
+
+          TCCR2A |=0x00000010;                  // CTC mode OCRA compare
+          TCCR2B &=0x00000000;
+          TCCR2B &=0x00000111;                  // prescaler 1024
+          OCR2A &= 0x00000000;
+          OCR2A |= 0x01111111;
+          OCR2B &= 0x00000000;
+          OCR2B |= 0x01111111;
+          TCNT2 &= 0x00000000;
+
+        while(v<50){
+          v++;
+
+          q2=0;
+
+          while((q2&0x00000010)==0){q2=TIFR2;}  // OCF2A : OCR2A compare match
+          
+          if(!PORT_DIG1&MARKER){bitSet(PORT_DIG1,MARKER);}
+          else {bitClear(PORT_DIG1,MARKER);}
+          TIFR2|=0x00000110;   // clear flags
+          q2=TIFR2;
+
+          }
+          */
+          /*/                                       --------- overflow
+
+          uint8_t v=0;
+
+          TCCR2A  = 0x00000000;                  // normal mode
+  
+          TCNT2=0;
+
+          while(v<50){
+          v++;
+
+          q2=0;
+
+          while((q2&1<<TOV2)==0){q2=TIFR2;}
+
+          //q3=TCNT2;
+          //TCNT2 |=TCNT2_VALUE; // reload counter
+          //Serial.print(q3);Serial.print(';');
+          
+          if(!PORT_DIG1&MARKER){bitSet(PORT_DIG1,MARKER);}
+          else {bitClear(PORT_DIG1,MARKER);}
+          //if(bitRead(PORT_DIG1,MARKER)==0){bitSet(PORT_DIG1,MARKER);}
+          //else {bitClear(PORT_DIG1,MARKER);}
+          TIFR2|=1<<TOV2;                          // clear flags
+          q2=TIFR2;
+          }
+          //*/
+
+
+//set timer2 interrupt at approx 30*2 mS periode __ 32mS maxi @8Mhz
+
+  cli();
+  TCCR2A = 0;
+  TCCR2B = 0;
+  // set compare match register for approx 30mS increments
+  OCR2A = 234;              // = 30 * 8000000 /1024
+  // turn on CTC mode
+  TCCR2A |= (1 << WGM21);
+  // Set 1024 prescaler
+  TCCR2B |= (1 << CS20);
+  TCCR2B |= (1 << CS21);
+  TCCR2B |= (1 << CS22);   
+  TCNT2  = 0;
+  // enable timer compare interrupt
+  TIMSK2 |= (1 << OCIE2A);
+  sei();
+
+      }break;
+
+    case 'y':
+      TIMSK2 &= ~(1 << OCIE2A); // disable interrupt
+      break;
     
     default:break;
   }
 }
+
 
 void testSleep(char mode)
 {
