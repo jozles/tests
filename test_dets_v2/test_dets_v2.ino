@@ -18,7 +18,7 @@ float volts=0;                           // tension alim (VCC)
 float temp;
 float refMiniT=747;
 float refMaxiT=753;                      // référence tension étalonnage th
-float refMiniV=350;
+float refMiniV=320;
 float refMaxiV=410;                      // référence tension étalonage volts
 
 uint8_t k;
@@ -238,7 +238,7 @@ void loop(){
 
       Serial.print(") ? ");
       if(!pgAuto){
-        c=getch();while(c>'6' || c<'0'){c=getch();};
+        c=getch();while(c>'9' || c<'0'){c=getch();};
         kv=(uint8_t)c-(uint8_t)'0';
       }
 
