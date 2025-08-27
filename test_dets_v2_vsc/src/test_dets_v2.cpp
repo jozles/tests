@@ -2,10 +2,9 @@
 
 #define MACHINE_328
 
-//#include "hard.h"
 #include "radio_const.h"
 #include "lpavr_powerSleep.h"
-//#include "lpavr_util.h"
+
 #include "eepr.h"
 #include <shutil2.h>
 #include <shconst2.h>
@@ -87,7 +86,7 @@ void int_ISR()
   //Serial.println("int_ISR");
 }
 
-ISR(TIMER2_COMPA_vect){       //timer2 interrupt toggles MARKER
+/*ISR(TIMER2_COMPA_vect){       //timer2 interrupt toggles MARKER
   //if(!PORT_DIG1&(1<<MARKER)){bitSet(PORT_DIG1,MARKER);}
   //else {bitClear(PORT_DIG1,MARKER);}
     if (toggle){
@@ -98,7 +97,7 @@ ISR(TIMER2_COMPA_vect){       //timer2 interrupt toggles MARKER
     digitalWrite(MARKER,LOW);
     toggle = 1;
   }
-}
+}*/
 
 void blk(uint16_t durat)
 {
@@ -107,7 +106,18 @@ void blk(uint16_t durat)
   bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
 }
 
- 
+void initMarker()
+{
+  bitSet(DDR_DIG1,MARKER);bitClear(PORT_DIG1,MARKER);
+  bitSet(DDR_DIG2,MARKER2);bitClear(PORT_DIG2,MARKER2);
+}
+
+void clearMarkers()
+{
+  bitClear(DDR_DIG1,MARKER);bitClear(PORT_DIG1,MARKER);
+  bitClear(DDR_DIG2,MARKER2);bitClear(PORT_DIG2,MARKER2);
+}
+
 void hardwarePowerUp()
 {
   bitSet(DDR_LED,BIT_LED);        //pinMode(LED,OUTPUT);
@@ -126,12 +136,6 @@ void hardwarePowerDown_()          // every loaded port pin -> in
 }
 
 void setup() {  
-  
-  bitSet(DDR_DIG1,MARKER);bitClear(PORT_DIG1,MARKER);
-  bitSet(DDR_DIG2,MARKER2);bitClear(PORT_DIG2,MARKER2);
-
-  bitClear(PORT_VCHK,BIT_VCHK);               //digitalWrite(VCHECK,VCHECKHL);
-  bitSet(DDR_VCHK,BIT_VCHK);                  //pinMode(VCHECK,OUTPUT);  
 
   Serial.begin(115200);delay(100);
   if(pgAuto){
@@ -142,8 +146,8 @@ void setup() {
   for(uint8_t i=0;i<5;i++){blk(20);delay(300);}
   Serial.print("_\n>>> start ");
   
-  /*
-  Serial.print(" patienter, sleepPowerDown en test)");delay(2);
+//  /*
+  Serial.print(" patienter, sleepPowerDown en test");delay(4);
 
   sleepPwrDown(0);                        // wait for interrupt from external timer to reach beginning of period
   t_on=millis();
@@ -157,7 +161,7 @@ void setup() {
   float period=(float)(millis()-t_on)/1000;
   Serial.print(" sleepPwrDown ok ");blk(500);                       // 1 blk 500mS - external timer calibration end
   Serial.print(" period ");Serial.print((int)(period*1000));Serial.println("mSec "); // external timer period
-*/
+//*/
 
   //testCrc();
 
@@ -166,17 +170,22 @@ void setup() {
   initConf();
 }
 
-void loop(){  
+void loop(){ 
+  
+  clearMarkers();
+
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
-  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  X tempo  E eprom  Y/y counters test");
+  Serial.println("blink avec delay      \nO k  S kip  T calibration thermo  V calibration volts  P perif nb  C consos  X tempo  E eprom  Y/y counters test");
 
   if(!pgAuto){
-    while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
-      delay(2000);
-      //sleepPwrDown(T2000);
+    while(!Serial.available()){
+      unsigned long dl=millis();
+      bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);
+      while((millis()-dl)<2000 && !Serial.available()){}
+
       bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
-      delay(2000);
-      //sleepPwrDown(T2000);  
+      dl=millis();
+      while((millis()-dl)<2000 && !Serial.available()){}
     }
     c=Serial.read();}
   else {pg++;if(pg>=NBPG){Serial.print("\nterminé");while(1){};}c=cpg[pg];c1=c1pg[pg];c2=c2pg;}
@@ -288,17 +297,27 @@ void loop(){
       Serial.println("Conso (brancher PPK / débrancher Serial après Start)");
       Serial.println("wait_tpl,sleepPwrDown(0),sleepPwrDown(500),sleepPowerDown(500)+led,sleepPowerDown(500)+pwr_th,Powon_Nrf(100)");
       Serial.println("S start (rebrancher Serial et reset pour sortir)");
+
+      DDRB=0;
+      DDRC=0;
+      DDRD=0;
+
+
       c='\0';
-      while(c!='S' && c!='s'){while(!Serial.available()){};c=Serial.read();}Serial.println();delay(1);
+      while(c!='S' && c!='s'){while(!Serial.available()){};c=Serial.read();}Serial.println(c);delay(1);
 
       while(1){
-        sleepPwrDown(0);sleepPwrDown(T500);digitalWrite(LED,HIGH);sleepPwrDown(T500);digitalWrite(LED,LOW);
+        sleepPwrDown(0);sleepPwrDown(T500);
+        bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);sleepPwrDown(T500);bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);
         bitSet(DDR_VCHK,BIT_VCHK);bitSet(PORT_VCHK,BIT_VCHK);sleepPwrDown(T500);bitClear(PORT_VCHK,BIT_VCHK);
-        bitSet(DDR_RPOW,BIT_RPOW);bitClear(PORT_RPOW,BIT_RPOW);delay(100);bitSet(PORT_RPOW,BIT_RPOW);
+        bitSet(DDR_RPOW,BIT_RPOW);bitClear(PORT_RPOW,BIT_RPOW);delay(100);bitClear(DDR_RPOW,BIT_RPOW);//bitSet(PORT_RPOW,BIT_RPOW);
       } 
       break;
       
     case 'X':{
+
+      initMarker();
+
       int8_t k=NB_PRESCALER_VALUES;
       int32_t slpt;
       uint32_t t_on[k],t_off[k],t_on1,t_off1,t_on2,t_off2;
@@ -362,7 +381,10 @@ void loop(){
       break;
 
     case 'Y':{
-        uint8_t q0,q1,q2,q3,q4,q5,q6;
+
+        initMarker();
+
+        //uint8_t q0,q1,q2,q3,q4,q5,q6;
         #define MAXQ 64
         uint8_t q[MAXQ];
         unsigned long t[MAXQ];
