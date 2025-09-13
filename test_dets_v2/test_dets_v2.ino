@@ -11,13 +11,25 @@
 
 #define ADDR_LENGTH 5
 
+#define N_PWR_LEVEL 4
+#define RF_POWER_0_VALUE  0X03        // 0db
+#define RF_POWER_6_VALUE  0X02        // -6db
+#define RF_POWER_12_VALUE 0X01        // -12db
+#define RF_POWER_18_VALUE 0X00        // -18db
+#define RF_POWER_L0 -18
+#define RF_POWER_L1 -12
+#define RF_POWER_L2 -6
+#define RF_POWER_L3 0
+uint8_t rf_power_v[N_PWR_LEVEL]={RF_POWER_0_VALUE,RF_POWER_6_VALUE,RF_POWER_12_VALUE,RF_POWER_18_VALUE};
+int8_t rf_power[N_PWR_LEVEL]={RF_POWER_L3,RF_POWER_L2,RF_POWER_L1,RF_POWER_L0};
+
 char c='\0';
 char c1='\0';
 char c2='\0';
 float volts=0;                           // tension alim (VCC)
 float temp;
-float refMiniT=747;
-float refMaxiT=753;                      // référence tension étalonnage th
+float refMiniT=735; //747;
+float refMaxiT=785; //753;                      // référence tension étalonnage th
 float refMiniV=320;
 float refMaxiV=410;                      // référence tension étalonage volts
 
@@ -38,10 +50,12 @@ float* vFactor;
 float* vOffset;
 byte*  macAddr;
 byte*  concAddr;
-uint8_t* numConc;
+uint8_t* concNb;
 uint8_t* concChannel;
 uint8_t* concSpeed;
 uint8_t* concPeriParams;
+uint8_t* powerLevel;
+int8_t*  perAdjust;
 
 bool   pgAuto=false;    // si true pas de saisie, paramétrage automatique ; valoriser kt=3 c='T', kv=4 c='V', c='E' c1='I' c2=n° perif, c='E' c1='L' ;
 int    pg=-1;               // pointeur fonction en cours en mode auto
@@ -170,7 +184,7 @@ void setup() {
 
 void loop(){  
   Serial.println("\nrégler le terminal sur \"pas de fin de ligne - et patienter à chaque saisie\" ");
-  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb   E eprom");
+  Serial.println("blink avec delay       O k  S kip  T calibration thermo  V calibration volts  P perif nb etc   E eprom");
 
   if(!pgAuto){
     while(!Serial.available()){bitSet(DDR_LED,BIT_LED);bitSet(PORT_LED,BIT_LED);delay(2000);bitClear(PORT_LED,BIT_LED);bitClear(DDR_LED,BIT_LED);delay(2000);}
@@ -193,30 +207,32 @@ void loop(){
       break;
 
     case 'T':
+    {
       bitSet(PORT_VCHK,BIT_VCHK);bitSet(DDR_VCHK,BIT_VCHK);
-      delay(1);
+      delay(1000);
 
       temp=adcRead(TADMUXVAL,1,0,0,20);
       Serial.print(" adcRead() Th ");Serial.println(temp);
       
       Serial.print(" valeur référence (");
-      for(int k=0;k<(refMaxiT-refMiniT);k++){
-        Serial.print(k);Serial.print("=.");Serial.print((int)(refMiniT+k));if(k<(refMaxiT-refMiniT-1)){Serial.print(" ");}
+      uint8_t v=5;
+      for(int k=0;k<(refMaxiT-refMiniT)/v;k++){
+        Serial.print(k);Serial.print("=.");Serial.print((int)(refMiniT+k*v));if(k*v<(refMaxiT-refMiniT-1)){Serial.print(" ");}
       }
 
       Serial.print(")? ");
       if(!pgAuto){
-        c=getch();while(c>'5' || c<'0'){c=getch();};
+        c=getch();while(c>'9' || c<'0'){c=getch();};
         kt=(uint8_t)c-(uint8_t)'0';
       }
 
       Serial.println(kt);
       temp=adcRead(TADMUXVAL,1,0,0,20);
-      *thFactor=(float)((float)(refMiniT+kt)/(float)temp)/10;
+      *thFactor=(float)((float)(refMiniT+kt*v)/(float)temp)/10;
       Serial.print(" adcRead() Th ");Serial.print(temp);Serial.print("  thFactor=");Serial.print(*thFactor*10000);
       getVT();Serial.print(" temp=");Serial.println(temp);
       bitClear(PORT_VCHK,BIT_VCHK);
-
+    }
       break;
 
     case 'V':
@@ -261,13 +277,33 @@ void loop(){
       Serial.print(" numéro concentrateur (0-3)? ");
       if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>'3' ){c2=getch();}}
       Serial.print(c2);Serial.print(" ");
-      *numConc=c2-48;
-      Serial.println(*numConc);
+      *concNb=c2-48;
+      Serial.println(*concNb);
+      
+      if(memcmp(configVers,"2d",2)>0){
+        for(uint8_t i=0;i<N_PWR_LEVEL;i++){
+          Serial.print(" powerLevel (");Serial.print(i);Serial.print("=");Serial.print(rf_power[i]);}
+        Serial.print(")? ");
+        if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>(N_PWR_LEVEL+48) ){c2=getch();}}
+        Serial.print(c2);Serial.print(" ");
+        *powerLevel=rf_power_v[c2-48];
+        uint8_t p=0;
+        for(p=0;p<N_PWR_LEVEL;p++){
+          if(*powerLevel==rf_power_v[p]){break;}
+        }
+        Serial.print(rf_power[p]);Serial.println("db");
+      
+        Serial.print(" perAdjust (0=-1 1=0 2=+1)? ");
+        if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>'2' ){c2=getch();}}
+        Serial.print(c2);Serial.print(" ");
+        *perAdjust=c2-48-1;
+        Serial.print(*perAdjust);Serial.println("ms");
+      }
       break;
       
     case 'E':
       Serial.print("Eeprom ");configPrint();
-      Serial.print("L oad  R ecord  S kip ");
+      Serial.print("L oad  R ecord  M ove to v2d   S kip ");
       
         if(!pgAuto){c1=getch();while(c1=='\0'){c1=getch();}}
         Serial.println(c1);
@@ -277,7 +313,7 @@ void loop(){
             configPrint();
             break;
           case 'R':
-            *concChannel=channelTable[*numConc];
+            *concChannel=channelTable[*concNb];
             *concSpeed=0;
             *concPeriParams=1;
             memcpy(configVers,VERSION,2);
@@ -285,6 +321,15 @@ void loop(){
             eeprom.store(configData,CONFIGLEN);
             break;
           case 'S':
+            break;
+          case 'M':
+            if(!eeprom.load(configData,CONFIGLEN)){Serial.println("****KO******");}
+            configPrint();          
+            memcpy(configVers,"2d",2);
+            initConf();
+            *powerLevel=1;
+            *perAdjust=0;
+            configPrint();
             break;
           default:break;
         }
@@ -361,6 +406,7 @@ float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_
     
     ADCSRA |= (1<<ADEN);                    // ADC enable to write ADMUX
     ADMUX   = admuxval;
+    delay(1000);
     ADCSRA  = 0 | (1<<ADEN) | (1<<ADSC) | (1<<ADIF) | (1<<ADPS2) | (0<<ADPS1) | (0<<ADPS0);   // ADC enable + start conversion + prescaler /16
 
     delayMicroseconds(40+dly*48);           // ok with /16 prescaler @8MHz
@@ -390,28 +436,35 @@ void initConf()
   macAddr=(byte*)temp;
   temp +=6;
   concAddr=(byte*)temp;
-  temp +=ADDR_LENGTH+1;
-  numConc=(uint8_t*)temp;
+  temp +=6;
+  concNb=(uint8_t*)temp;
   temp +=sizeof(uint8_t);
   concChannel=(uint8_t*)temp;
-  temp +=sizeof(uint8_t);
+  temp+=sizeof(uint8_t);
   concSpeed=(uint8_t*)temp;
-  temp +=sizeof(uint8_t);
+  temp+=sizeof(uint8_t);
   concPeriParams=(uint8_t*)temp;
-  temp +=sizeof(uint8_t);
-
-  temp+=31;                   // dispo
-
+  temp+=sizeof(uint8_t);
+  powerLevel=(uint8_t*)temp;
+  temp+=sizeof(uint8_t);
+  perAdjust=(uint8_t*)temp;
+  temp+=sizeof(uint8_t);
+  powerLevel=(uint8_t*)temp;
+  temp+=sizeof(uint8_t);
+  perAdjust=(uint8_t*)temp;
+  temp+=sizeof(uint8_t);
+  temp+=29;                   // dispo
+  
   byte* configEndOfRecord=(byte*)temp;      // doit être le dernier !!!
 
   long configLength=(long)configEndOfRecord-(long)configBegOfRecord+1;  
   Serial.print("CONFIGLEN=");Serial.print(CONFIGLEN);Serial.print("/");Serial.println(configLength);
   delay(10);if(configLength>CONFIGLEN) {lethalSleep();}
 
-  memcpy(configVers,VERSION,2);
+  //memcpy(configVers,VERSION,2);
   memcpy(macAddr,MAC,6);  
   strncpy((char*)concAddr,CONC,5);
-  *numConc=0;
+  *concNb=0;
   *thFactor=0.1071;
   *thOffset=50;
   *vFactor=0.0057;
@@ -419,16 +472,19 @@ void initConf()
   *concChannel=0;
   *concSpeed=0;
   *concPeriParams=0;
+  *powerLevel=1;
+  *perAdjust=0;
 }
 
 void configPrint()
 {
     uint16_t configLen;memcpy(&configLen,configData+EEPRLENGTH,2);
-    char configVers[3];memcpy(configVers,configData+EEPRVERS,2);configVers[3]='\0';
-    Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.print(configLen);Serial.print(" V ");Serial.print(configVers[0]);Serial.println(configVers[1]);
+    char configVers[3];memcpy(configVers,configData+EEPRVERS,2);configVers[2]='\0';
+    Serial.print(" V ");Serial.print(configVers);Serial.print("  ");
+    Serial.print("crc ");dumpfield((char*)configData,4);Serial.print(" len ");Serial.println(configLen);
     char buf[7];memcpy(buf,concAddr,5);buf[5]='\0';
-    Serial.print("MAC  ");dumpstr((char*)macAddr,6);Serial.print("CONC ");dumpstr((char*)concAddr,5);
-    if(memcmp(configVers,"01",2)!=0);Serial.print("numConc ");dumpstr((char*)numConc,1);
+    Serial.print("MAC   ");dumpstr((char*)macAddr,6);Serial.print("CONC  ");dumpstr((char*)concAddr,5);
+    if(memcmp(configVers,"01",2)!=0);Serial.print("concNb");dumpstr((char*)concNb,1);
 
     Serial.print("  thFactor=");Serial.print(*thFactor*10000);Serial.print("  thOffset=");Serial.print(*thOffset);   
     Serial.print("   vFactor=");Serial.print(*vFactor*10000);Serial.print("   vOffset=");Serial.println(*vOffset);   
@@ -436,7 +492,15 @@ void configPrint()
     for(uint8_t i=0;i<MAXCONC;i++){Serial.print(i);Serial.print(" ");Serial.print(channelTable[i]);Serial.print("  ");}Serial.println(")");
     Serial.print("  channel=");Serial.print(*concChannel);Serial.print("  speed=");Serial.print(*concSpeed);
     Serial.print("  concPeriParams=");Serial.println(*concPeriParams);
-
+  if(memcmp(configVers,"2d",2)==0){
+    Serial.print("  powerLevel=");Serial.print(*powerLevel);Serial.print(" ! ");
+    uint8_t p=0;
+    for(p=0;p<N_PWR_LEVEL;p++){Serial.print(p);Serial.print(' ');Serial.print(rf_power_v[p]);Serial.print(' ');Serial.print(rf_power[p]);Serial.print(' ');
+          if(*powerLevel==rf_power_v[p]){break;}}
+    Serial.print(rf_power[p]);Serial.println("db");
+      
+    Serial.print("  perAdjust=");Serial.print(*perAdjust);Serial.println("ms");
+  }
 }
 
 uint32_t calcCrc32b(byte* data,uint16_t len)
