@@ -268,34 +268,39 @@ void loop(){
       break;
 
     case 'P':
+      c2=getch();
       Serial.print(" numéro perif ? ");
-      if(!pgAuto){c2=getch();while(c2=='\0'){c2=getch();}}
-      Serial.print(c2);Serial.print(" ");
+      if(!pgAuto){c2='\0';while(c2=='\0'){c2=getch();}}
+      Serial.print(' ');
       macAddr[4]=c2;macAddr[5]='\0';
       Serial.println((char*)macAddr);
 
+      c2=getch();
       Serial.print(" numéro concentrateur (0-3)? ");
-      if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>'3' ){c2=getch();}}
-      Serial.print(c2);Serial.print(" ");
+      if(!pgAuto){c2='\0';while(c2=='\0' || c2<'0' || c2>'3' ){c2=getch();}}
+      Serial.print(' ');
       *concNb=c2-48;
       Serial.println(*concNb);
       
-      if(memcmp(configVers,"2d",2)>0){
+      if(memcmp(configVers,"2d",2)==0){
+        c2=getch();
+        Serial.print(" powerLevel (");
         for(uint8_t i=0;i<N_PWR_LEVEL;i++){
-          Serial.print(" powerLevel (");Serial.print(i);Serial.print("=");Serial.print(rf_power[i]);}
-        Serial.print(")? ");
-        if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>(N_PWR_LEVEL+48) ){c2=getch();}}
-        Serial.print(c2);Serial.print(" ");
+          Serial.print(i);Serial.print("=");Serial.print(rf_power[i]);if(i<N_PWR_LEVEL-1){Serial.print(' ');}}
+        Serial.print("db)? ");
+        if(!pgAuto){c2='\0';while(c2=='\0' || c2<'0' || c2>(N_PWR_LEVEL+48) ){c2=getch();}}
+        Serial.print(' ');
         *powerLevel=rf_power_v[c2-48];
         uint8_t p=0;
         for(p=0;p<N_PWR_LEVEL;p++){
           if(*powerLevel==rf_power_v[p]){break;}
         }
-        Serial.print(rf_power[p]);Serial.println("db");
+        Serial.print(rf_power[p]);Serial.print("db (");Serial.print(p);Serial.println(')');
       
+        c2=getch();
         Serial.print(" perAdjust (0=-1 1=0 2=+1)? ");
-        if(!pgAuto){c2=getch();while(c2=='\0' || c2<'0' || c2>'2' ){c2=getch();}}
-        Serial.print(c2);Serial.print(" ");
+        if(!pgAuto){c2='\0';while(c2=='\0' || c2<'0' || c2>'2' ){c2=getch();}}
+        Serial.print(' ');
         *perAdjust=c2-48-1;
         Serial.print(*perAdjust);Serial.println("ms");
       }
@@ -316,7 +321,7 @@ void loop(){
             *concChannel=channelTable[*concNb];
             *concSpeed=0;
             *concPeriParams=1;
-            memcpy(configVers,VERSION,2);
+            //memcpy(configVers,VERSION,2);
             configPrint();
             eeprom.store(configData,CONFIGLEN);
             break;
@@ -495,8 +500,8 @@ void configPrint()
   if(memcmp(configVers,"2d",2)==0){
     Serial.print("  powerLevel=");Serial.print(*powerLevel);Serial.print(" ! ");
     uint8_t p=0;
-    for(p=0;p<N_PWR_LEVEL;p++){Serial.print(p);Serial.print(' ');Serial.print(rf_power_v[p]);Serial.print(' ');Serial.print(rf_power[p]);Serial.print(' ');
-          if(*powerLevel==rf_power_v[p]){break;}}
+    for(p=0;p<N_PWR_LEVEL;p++){//Serial.print(p);Serial.print(' ');Serial.print(rf_power_v[p]);Serial.print(' ');Serial.print(rf_power[p]);Serial.print(' ');
+        if(*powerLevel==rf_power_v[p]){break;}}
     Serial.print(rf_power[p]);Serial.println("db");
       
     Serial.print("  perAdjust=");Serial.print(*perAdjust);Serial.println("ms");
