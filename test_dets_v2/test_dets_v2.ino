@@ -172,7 +172,7 @@ void setup() {
 
   float period=(float)(millis()-t_on)/1000;
   Serial.print(" sleepPwrDown ok ");blk(500);                       // 1 blk 500mS - external timer calibration end
-  Serial.print(" period ");Serial.print(period);Serial.println("sec "); // external timer period
+  Serial.print(" period ");Serial.print(period*1000);Serial.println("msec "); // external timer period
 
 
   //testCrc();
@@ -238,18 +238,18 @@ void loop(){
     case 'V':
     {
       bitSet(PORT_VCHK,BIT_VCHK);bitSet(DDR_VCHK,BIT_VCHK);
-      delay(1);
+      delay(2);
 
       volts=adcRead(VADMUXVAL,1,0,0,20);
       Serial.print(" adcRead(7) V ");Serial.println(volts);
 
       float intThSensor=adcRead(INADMUXVAL,1,0,0,20);     
       float intTh=intThSensor*1100/1024-242-45;                               // see datasheet page 247 
-      Serial.print(" adcRead(int th sensor) ");Serial.print(intThSensor);Serial.print(" internal temp =");Serial.println(intTh);
+      Serial.print(" adcRead(internal th sensor) ");Serial.print(intThSensor);Serial.print(" internal temp =");Serial.println(intTh);
       
       Serial.print(" valeur référence (");
       for(int k=0;k<(refMaxiV/10-refMiniV/10+1);k++){
-        Serial.print(k);Serial.print("=");Serial.print((refMiniV/10+k)/10);if(k<(refMaxiV/10-refMiniV/10)){Serial.print(" ");}
+        Serial.print(k);Serial.print("=");Serial.print((float)(refMiniV/10+k)/10);if(k<(refMaxiV/10-refMiniV/10)){Serial.print(" ");}
       }
 
       Serial.print(") ? ");
@@ -261,7 +261,7 @@ void loop(){
       Serial.println(kv);
       volts=adcRead(VADMUXVAL,1,0,0,20);
       *vFactor=(float)((float)(((refMiniV/10)+kv)*10)/(float)volts)/100;
-      Serial.print(" adcRead() V ");Serial.print(volts);Serial.print("   vFactor=");Serial.print(*vFactor*10000);
+      Serial.print(" adcRead() V ");Serial.print(volts);Serial.print("   vFactor=");Serial.print("0.00");Serial.print((float)*vFactor*100000000);
       getVT();Serial.print("  volt=");Serial.println(volts);
       bitClear(PORT_VCHK,BIT_VCHK);
     }
@@ -281,6 +281,7 @@ void loop(){
       Serial.print(' ');
       *concNb=c2-48;
       Serial.println(*concNb);
+      *concChannel=channelTable[*concNb];
       
       if(memcmp(configVers,"2d",2)==0){
         c2=getch();
@@ -291,11 +292,11 @@ void loop(){
         if(!pgAuto){c2='\0';while(c2=='\0' || c2<'0' || c2>(N_PWR_LEVEL+48) ){c2=getch();}}
         Serial.print(' ');
         *powerLevel=rf_power_v[c2-48];
-        uint8_t p=0;
-        for(p=0;p<N_PWR_LEVEL;p++){
+        uint8_t p=c2-48;
+        /*for(p=0;p<N_PWR_LEVEL;p++){
           if(*powerLevel==rf_power_v[p]){break;}
-        }
-        Serial.print(rf_power[p]);Serial.print("db (");Serial.print(p);Serial.println(')');
+        }*/
+        Serial.print(rf_power[p]);Serial.print("db (0x0");Serial.print(*powerLevel);Serial.println(')');
       
         c2=getch();
         Serial.print(" perAdjust (0=-1 1=0 2=+1)? ");
@@ -414,7 +415,10 @@ float adcRead(uint8_t admuxval,float factor, uint16_t offset, uint8_t ref,uint8_
     delay(1000);
     ADCSRA  = 0 | (1<<ADEN) | (1<<ADSC) | (1<<ADIF) | (1<<ADPS2) | (0<<ADPS1) | (0<<ADPS0);   // ADC enable + start conversion + prescaler /16
 
-    delayMicroseconds(40+dly*48);           // ok with /16 prescaler @8MHz
+    //delayMicroseconds(40+dly*48);           // ok with /16 prescaler @8MHz
+
+    unsigned long t=micros();
+    while((ADCSRA & (1<<ADSC))!=0 && (micros()-t)<200){}
    
     a=ADCL;
     a+=ADCH*256;
@@ -454,10 +458,7 @@ void initConf()
   temp+=sizeof(uint8_t);
   perAdjust=(uint8_t*)temp;
   temp+=sizeof(uint8_t);
-  powerLevel=(uint8_t*)temp;
-  temp+=sizeof(uint8_t);
-  perAdjust=(uint8_t*)temp;
-  temp+=sizeof(uint8_t);
+ 
   temp+=29;                   // dispo
   
   byte* configEndOfRecord=(byte*)temp;      // doit être le dernier !!!
@@ -491,16 +492,16 @@ void configPrint()
     Serial.print("MAC   ");dumpstr((char*)macAddr,6);Serial.print("CONC  ");dumpstr((char*)concAddr,5);
     if(memcmp(configVers,"01",2)!=0);Serial.print("concNb");dumpstr((char*)concNb,1);
 
-    Serial.print("  thFactor=");Serial.print(*thFactor*10000);Serial.print("  thOffset=");Serial.print(*thOffset);   
-    Serial.print("   vFactor=");Serial.print(*vFactor*10000);Serial.print("   vOffset=");Serial.println(*vOffset);   
+    Serial.print("  thFactor=0.");Serial.print(*thFactor*1000000);Serial.print("  thOffset=");Serial.print(*thOffset);   
+    Serial.print("   vFactor=0.00");Serial.print(*vFactor*100000000);Serial.print("   vOffset=");Serial.println(*vOffset);   
     Serial.print("(table channels : ");
     for(uint8_t i=0;i<MAXCONC;i++){Serial.print(i);Serial.print(" ");Serial.print(channelTable[i]);Serial.print("  ");}Serial.println(")");
     Serial.print("  channel=");Serial.print(*concChannel);Serial.print("  speed=");Serial.print(*concSpeed);
     Serial.print("  concPeriParams=");Serial.println(*concPeriParams);
   if(memcmp(configVers,"2d",2)==0){
-    Serial.print("  powerLevel=");Serial.print(*powerLevel);Serial.print(" ! ");
+    Serial.print("  powerLevel=0x0");Serial.print(*powerLevel);Serial.print(" ! ");
     uint8_t p=0;
-    for(p=0;p<N_PWR_LEVEL;p++){//Serial.print(p);Serial.print(' ');Serial.print(rf_power_v[p]);Serial.print(' ');Serial.print(rf_power[p]);Serial.print(' ');
+    for(p=0;p<N_PWR_LEVEL;p++){   //Serial.print(p);Serial.print(' ');Serial.print(rf_power_v[p]);Serial.print(' ');Serial.print(rf_power[p]);Serial.print(' ');
         if(*powerLevel==rf_power_v[p]){break;}}
     Serial.print(rf_power[p]);Serial.println("db");
       
