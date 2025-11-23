@@ -1,30 +1,21 @@
 
 #include <Arduino.h> 
+#include "frequences.h"
 
 #define LED LED_BUILTIN
-
-/* générateur de fréquences discrètes à partir de valeurs linéaires
-
-  Le dac fournit des valeurs v comprises entre 0 et 2^n  (n=nombre de bits du dac)
-  On décide du nombre d'octaves couvert OCTNB
-  Il y aura (2^n)%OCTNB incréments par octave.
-  La fréquence à chaque incrément est calculée par la formule :
-    freq = 2^v soit 2^(int(v/OCTNB))+2^((v%OCTNB)/(n%OCTNB)) 
-  on a donc 2 tables : les fréquences d'octaves et les ratios d'incréments 
-  ainsi le calcul est minimisé 
-  Quand on dispose d'une grande mémoire et que l'on est très pressé on peut faire une table avec les 2^n valeurs 
-
-*/
-
-
-#define OCTNB 11
-#define INCRNB 409    // int(4096/10)=409
-#define FREQ0 16.345  // pour avoir un LA à 440Hz avecc 409 incréments par octave
 
 
 const uint8_t octNb = OCTNB;
 float baseFreq = FREQ0;
 float octFreq[octNb+1];
+
+void blink_wait(){
+  pinMode(LED,OUTPUT);
+  while(1){
+    digitalWrite(LED,HIGH);delay(50);
+    digitalWrite(LED,LOW);delay(500);
+    if (Serial.available()) break;} // wait for Serial to be ready             
+}
 
 void fillOctFreq() { 
   for (uint8_t i = 0; i <= octNb; i++) {
@@ -82,10 +73,9 @@ float calcFreq(uint16_t val)
  return freq;
 }
 
-void setup() {
+void start()                //void setup() 
+{  
   Serial.begin(115200);Serial.println("+calcul fréquences");
-  
-  while(1){pinMode(LED,OUTPUT);digitalWrite(LED,HIGH);delay(50);digitalWrite(LED,LOW);delay(500);if (Serial.available()) break;} // wait for Serial to be ready
   
   fillOctFreq();
   showOctFreq();
@@ -98,4 +88,6 @@ void setup() {
   showOctIncr(octFreq[oct],octFreq[oct+1]);
 }
 
-void loop(){}
+//void loop(){
+//blink_wait();
+//}
