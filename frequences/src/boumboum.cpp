@@ -23,7 +23,7 @@ void initLeds(){
 void setup(){
     Serial.begin(115200);Serial.println("+boumboum");
 
-    coderInit(PIO_PDSR_D,PIO_CLOCK,PIO_DATA,PIO_SW,PIN_CODER_A,PIN_CODER_B,PIN_CODER_C,PIN_CODER_GND,PIN_CODER_VCC);
+    coderInit(PIO_PDSR_D,PIO_CLOCK,PIO_DATA,PIO_SW,PIN_CODER_A,PIN_CODER_B,PIN_CODER_C,PIN_CODER_GND,PIN_CODER_VCC,CODER_TIMER_POOLING_INTERVAL_MS,CODER_STROBE_NUMBER);
     coderSetup(&coder1Counter);
 
     initLeds();

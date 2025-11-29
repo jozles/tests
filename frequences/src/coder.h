@@ -10,10 +10,10 @@
 // to validate it
 // shortly there's 2 strobes : no change after change and no change before next change
 
-#define CODER_TIMER_POOLING_INTERVAL_MS 5  // timer pooling interval in milliseconds
-#define CODER_STROBE_NUMBER 3              // number of timer intervals for a valid strobe
+//#define CODER_TIMER_POOLING_INTERVAL_MS 5  // timer pooling interval in milliseconds
+// #define CODER_STROBE_NUMBER 3              // number of timer intervals for a valid strobe
 
-void coderInit(volatile uint32_t pio,uint8_t pio_clock,uint8_t pio_data,uint8_t pio_sw,uint8_t clock_pin,uint8_t data_pin,uint8_t switch_pin,uint8_t ground_pin,uint8_t vcc_pin);
+void coderInit(volatile uint32_t port,uint8_t pio_ck,uint8_t pio_d,uint8_t pio_sw,uint8_t clock_pin,uint8_t data_pin,uint8_t switch_pin,uint8_t ground_pin,uint8_t vcc_pin,uint16_t ctpi,uint8_t cstn);
 void coderSetup(volatile int32_t* cTC);
 
 #endif /* CODER_H_ */
