@@ -1,16 +1,7 @@
 #ifndef CODER_H_
 #define CODER_H_
 
-#define PIN_CODER_GND 23
-#define PIN_CODER_VCC 24
-#define PIN_CODER_A   25        // data
-#define PIN_CODER_B   26        // switch D1
-#define PIN_CODER_C   27        // clock
 
-#define PIO_PDSR_D (*(volatile uint32_t *)0x400E143CU)   // PORTD 32 bits
-#define BIT_CODER_CLOCK   2                              // D2 sur PORTD
-#define BIT_CODER_DATA    0                              // D0 sur PORTD
-#define BIT_CODER_SW      1                              // D1 sur PORTD
 
 // these 2 parameters are working together ; their product is the minimum time where no change should occur 
 // on the clock line after a change
@@ -22,6 +13,7 @@
 #define CODER_TIMER_POOLING_INTERVAL_MS 5  // timer pooling interval in milliseconds
 #define CODER_STROBE_NUMBER 3              // number of timer intervals for a valid strobe
 
-void init_un_codeur();
+void coderInit(volatile uint32_t pio,uint8_t pio_clock,uint8_t pio_data,uint8_t pio_sw,uint8_t clock_pin,uint8_t data_pin,uint8_t switch_pin,uint8_t ground_pin,uint8_t vcc_pin);
+void coderSetup(volatile int32_t* cTC);
 
 #endif /* CODER_H_ */

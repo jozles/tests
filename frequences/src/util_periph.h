@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 
+void blink_wait();
 
 
 #endif  //UTIL_PERIPH_H_

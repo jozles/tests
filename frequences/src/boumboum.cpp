@@ -1,5 +1,6 @@
 #include <Arduino.h> 
-#include <math.h>   
+#include <math.h> 
+#include "const.h"  
 #include "frequences.h"
 #include "coder.h"
 #include "util_periph.h"
@@ -9,7 +10,7 @@
 #define LED_GREEN         7
 
 uint32_t portD=  PIO_PDSR_D ;
-extern volatile int32_t* coderTimerCount;
+
 int32_t coder1Counter=0;
 
 
@@ -22,12 +23,10 @@ void initLeds(){
 void setup(){
     Serial.begin(115200);Serial.println("+boumboum");
 
-    int32_t* coderTimerCount=&coder1Counter;
-    init_un_codeur();
+    coderInit(PIO_PDSR_D,PIO_CLOCK,PIO_DATA,PIO_SW,PIN_CODER_A,PIN_CODER_B,PIN_CODER_C,PIN_CODER_GND,PIN_CODER_VCC);
+    coderSetup(&coder1Counter);
 
     initLeds();
-
-
 }
 
 void loop(){

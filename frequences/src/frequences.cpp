@@ -1,21 +1,11 @@
 
 #include <Arduino.h> 
 #include "frequences.h"
-
-#define LED LED_BUILTIN
-
+#include "util_periph.h"
 
 const uint8_t octNb = OCTNB;
 float baseFreq = FREQ0;
 float octFreq[octNb+1];
-
-void blink_wait(){
-  pinMode(LED,OUTPUT);
-  while(1){
-    digitalWrite(LED,HIGH);delay(50);
-    digitalWrite(LED,LOW);delay(500);
-    if (Serial.available()) break;} // wait for Serial to be ready             
-}
 
 void fillOctFreq() { 
   for (uint8_t i = 0; i <= octNb; i++) {
