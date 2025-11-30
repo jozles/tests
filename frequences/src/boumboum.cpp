@@ -5,19 +5,21 @@
 #include "coder.h"
 #include "util_periph.h"
 
-#define LED_BLUE          5
-#define LED_RED           6
-#define LED_GREEN         7
+uint8_t leds[NBLEDS]={LED_RED,LED_GREEN,LED_BLUE};
 
 uint32_t portD=  PIO_PDSR_D ;
 
-int32_t coder1Counter=0;
+volatile int32_t coder1Counter=0;
+int32_t coder1Counter0=0;
 
+uint32_t intDur;
 
 void initLeds(){
-    pinMode(LED_BLUE,OUTPUT); digitalWrite(LED_BLUE,LOW);
-    pinMode(LED_RED,OUTPUT);  digitalWrite(LED_RED,LOW);
+    pinMode(LED,OUTPUT); digitalWrite(LED,LOW);
+    pinMode(LED_BLUE,OUTPUT);digitalWrite(LED_BLUE,LOW);
+    pinMode(LED_RED,OUTPUT);digitalWrite(LED_RED,LOW);
     pinMode(LED_GREEN,OUTPUT);digitalWrite(LED_GREEN,LOW);
+    pinMode(LED_GND,OUTPUT);digitalWrite(LED_GND,LOW);
 }
 
 void setup(){
@@ -31,7 +33,9 @@ void setup(){
 
 void loop(){
 
-      if(coder1Counter/2000==0){
-      digitalWrite(LED_RED,!digitalRead(LED_RED));
+    if(coder1Counter!=coder1Counter0){
+        Serial.print("\r     \r");Serial.print(coder1Counter);            // Serial.print(intDur);Serial.print(' ');
+        coder1Counter0=coder1Counter;    
     }
+    
 }

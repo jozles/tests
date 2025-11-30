@@ -1,13 +1,16 @@
 #ifndef _CONST_H
 #define _CONST_H_
 
+
+/* coder */
+
 #define CODER_PORT PORTD
 
 #define PIN_CODER_GND 23
 #define PIN_CODER_VCC 24
-#define PIN_CODER_A   25        // data
-#define PIN_CODER_B   26        // switch D1
-#define PIN_CODER_C   27        // clock
+#define PIN_CODER_A   27        // clock
+#define PIN_CODER_B   25        // data
+#define PIN_CODER_C   26        // switch
 
 // every pins of a specific coder should be on the same port
 #define PIO_PDSR_D uint32_t(*(volatile uint32_t *)0x400E143CU)   // PORTD 32 bits
@@ -17,16 +20,26 @@
 
 
 // these 2 parameters are working together ; their product is the minimum time where no change should occur 
-// on the clock line after a change
+// on the clock line after a change in mS
 // the pooling interval duration is the time between 2 calls to the coder timer handler
-// its also half the time where no change should occur on the clock line after a change 
-// to validate it
+// it's also the delay where no change should occur on the clock line after a change to validate it
 // shortly there's 2 strobes : no change after change and no change before next change
+// It's possible to reach 2mS between 2 changes but who cares
 
-#define CODER_TIMER_POOLING_INTERVAL_MS 5  // timer pooling interval in milliseconds
-#define CODER_STROBE_NUMBER 3              // number of timer intervals for a valid strobe
+#define CODER_TIMER_POOLING_INTERVAL_MS 1  // timer pooling interval in milliseconds            
+#define CODER_STROBE_NUMBER 3              // minimal timer intervals for a valid new change
 
 #define LED LED_BUILTIN
+
+#define NBLEDS            3
+#define LED_BLUE          47
+#define LED_RED           53
+#define LED_GREEN         49
+#define LED_GND           51
+
+/* oscillator */
+
+#define WFSTEPNB 2048
 
 #endif  //_CONST_H_
 
