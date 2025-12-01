@@ -2,8 +2,9 @@
 #include "const.h"
 
 uint16_t sineWaveform[WFSTEPNB];
+uint32_t sampleCounter=0;
 
-#define PI 3.1415926536
+//#define PI 3.1415926536
 
 void fillSineWaveForms(){
     for(uint16_t i=0;i<WFSTEPNB/4;i++){
@@ -19,5 +20,5 @@ float freqStepCalc(float freq){
 }
 
 uint16_t freqPlay(uint16_t step,uint16_t timeStamp){
-    
+    return timeStamp;   
 }

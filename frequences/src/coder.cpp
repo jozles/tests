@@ -13,6 +13,7 @@ bool coderClock=0;                          // current physical coder clock valu
 bool coderClock0=0;                         // previous physical coder clock value
 bool coderData=0;                           // current physical coder data value
 bool coderData0=0;                          // previous physical coder data value
+bool coderSwitch=0;                         // current physical coder switch value
 // due_pins
 volatile uint32_t pio_port;
 uint8_t pio_clock_bit;
@@ -64,11 +65,13 @@ void coderTimerHandler(){
 
     if(coderTimerCount!=nullptr){
 
+        coderSwitch=digitalRead(arduino_switch_pin);
+
         if((!coderClock)^coderData){
-            (*coderTimerCount)--;
+            (*coderTimerCount)-=1+coderSwitch;
         } 
         else {
-            (*coderTimerCount)++;
+            (*coderTimerCount)+=1+coderSwitch;
         }
     }
 
