@@ -40,7 +40,8 @@
 /* oscillator */
 
 #define WFSTEPNB 2048
-#define FSAMPLE 44000       // 43008/21=2048 ; 44000/4=512 21Hz à 11KHz 
+#define SAMPLE_F 44100       
+#define SAMPLE_PER (float)1/SAMPLE_F 
 
 #endif  //_CONST_H_
 
