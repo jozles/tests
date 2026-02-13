@@ -22,7 +22,7 @@
 #define LED_ON  0
 #define LED_OFF 1
 
-#define KEY_PIN  0
+#define KEY_PIN  36
 
 bool interrupt_flag = false;
 
@@ -42,7 +42,7 @@ void setup()
   digitalWrite(GREEN_PIN, LED_OFF); //GREEN
   digitalWrite(BLUE_PIN, LED_OFF); //GREEN
   //Initialize KEY GPIO
-  pinMode(KEY_PIN,INPUT_PULLUP);
+  pinMode(KEY_PIN,INPUT);  //INPUT_PULLUP);
 
   attachInterrupt(digitalPinToInterrupt(KEY_PIN), handleInterrupt, FALLING);
 }
