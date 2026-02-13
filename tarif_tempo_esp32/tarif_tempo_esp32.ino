@@ -16,6 +16,13 @@ TFT_eSPI my_lcd = TFT_eSPI();
 #define YELLOW  0xFFE0
 #define WHITE   0xFFFF
 
+const uint16_t dayColor[]={BLUE,WHITE,RED,BLACK};
+const uint16_t txtColor[]={BLACK,BLUE,BLACK,WHITE};
+const char* validColors="Bleu BlancRougeInconnu";
+#define LENVCOLOR 5
+
+#define LD 12
+char date[LD];
 
 // ***********************************
 
@@ -55,18 +62,21 @@ void wifiConnect(){
   printf("\nWiFi connecté !      \n");  
 }
 
-void getTempo(uint8_t tt) {
+int getTempo(uint8_t tt,char* d) {
 
-  printf("%c\n",*url[tt]);
+  //printf("%s\n",url[tt]);
+  Serial.println((char*)url[tt]);
+  
+  const char* color="Inconnu";
   
   HTTPClient http;
-  http.begin((String)*url[tt]);
+  http.begin((String)(char*)url[tt]);
   int httpCode = http.GET();  // Exécute la requête GET
 
   if (httpCode > 0) {         // Si le serveur a répondu
     String payload = http.getString();   // Récupère la réponse au format texte
-    printf("Réponse brute %c:\n",ttt[tt]);
-    printf("%c\n",payload);
+    printf("Réponse brute %s:\n",(char*)ttt[tt]);
+    printf("%s\n",payload.c_str());
 
     // Document JSON pour ArduinoJson (512 octets suffisent après test)
     StaticJsonDocument<512> doc;
@@ -74,20 +84,23 @@ void getTempo(uint8_t tt) {
     // Décode le texte JSO
     if (deserializeJson(doc, payload) == DeserializationError::Ok) {
 
-      const char* color = doc["libCouleur"] | "INCONNU";  // Lit la valeur "couleur"
-      printf("%c : %c\n",ttt[tt],color);
+      color = doc["libCouleur"];  // Lit la valeur "couleur"
+      strcpy(d,doc["dateJour"] | "INCONNU");
+      printf("%s : %s ; date : %s\n",(char*)ttt[tt],color,d);
     } 
-    else {printf("Erreur parsing JSON (%c)",ttt[tt]);
+    else {
+      printf("Erreur parsing JSON (%c)",(char*)ttt[tt]);
     }
-
   } 
-  else {printf("Erreur HTTP (%c): %d\n", ttt[tt],httpCode);}
+  else {printf("Erreur HTTP (%c): %d\n", (char*)ttt[tt],httpCode);}
   http.end();  // Ferme la connexion HTTP
+  return (strstr(validColors,color)-validColors)/LENVCOLOR;
 }
 
 void setup() {
 
   Serial.begin(115200); // Démarre la console série
+  delay(2000);
   Serial.println("+test tempo ");
 
   my_lcd.init();
@@ -100,17 +113,31 @@ void setup() {
   wifiConnect();
 
   // Récupère les couleurs
-  getTempo(TODAY);
-  getTempo(TOMORROW);
+  uint16_t dayC=3;
+  
+  memset(date,0x00,LD);
+  dayC=getTempo(TODAY,date);
+  printf("dayC : %d ; date : %s\n",dayC,date);
+  my_lcd.fillRect(0,30,240,200,dayColor[dayC]);
+  my_lcd.setTextColor(txtColor[dayC]);
+  my_lcd.drawString(date,5,40,2);  
+  
+  memset(date,0x00,LD);
+  dayC=getTempo(TOMORROW,date);
+  printf("dayC : %d ; date : %s\n",dayC,date);
+  my_lcd.fillRect(0,230,240,100,dayColor[dayC]);
+  my_lcd.setTextColor(txtColor[dayC]);
+  my_lcd.drawString(date,5,240,2);
+  
   
    //my_lcd.drawString(color_name[i], 0, ((my_lcd.height()/cnum)-16)/2+(my_lcd.height()/cnum)*i,2);
    // my_lcd.setTextColor(RED);
    //my_lcd.drawString("Hello World!", 0, 0,1);
    //my_lcd.setTextColor(YELLOW);
    //my_lcd.drawFloat(01234.56789, 5, 0, 8,2);
-   //my_lcd.fillRect(n*my_lcd.width()/32,48,(n+1)*my_lcd.width()/32,64,my_lcd.color565(n*8, n*8, n*8)&color_mask[rotation])
+  //fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
   
-
+  
 }
 
 
