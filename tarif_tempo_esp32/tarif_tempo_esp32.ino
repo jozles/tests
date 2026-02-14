@@ -6,14 +6,16 @@
 #include "font.h"
 #include <TFT_Touch.h>
 
-#define RTP_DOUT 39
-#define RTP_DIN  32
-#define RTP_SCK  25
-#define RTP_CS   33
-#define RTP_IRQ  36
+#define VERSION "1.1\0"
+
+#define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
+#define TOUCH_CS  33
+#define TOUCH_SCK 25
+#define TOUCH_DIN 32
+#define TOUCH_DOUT 39
 
 TFT_eSPI my_lcd = TFT_eSPI(); 
-TFT_Touch my_touch = TFT_Touch(RTP_CS, RTP_SCK, RTP_DIN, RTP_DOUT);
+TFT_Touch my_touch = TFT_Touch(TOUCH_CS, TOUCH_SCK, TOUCH_DIN, TOUCH_DOUT);
 
 #define BLACK   0x0000
 #define BLUE    0x001F
@@ -52,8 +54,24 @@ uint8_t txts=2;
 
 char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0samedi\0 \0"};
 
+uint16_t xpos=160;
+
+void goToSleep() {
+  my_lcd.fillRect(0,0,TFT_WIDTH,25,BLACK);
+  my_lcd.setTextColor(GREEN, BLACK);
+  my_lcd.drawString("Going to sleep...", 0, 10, 2);
+  delay(2500);
+  my_lcd.drawString("sleeping...      ", 0, 10, 2);
+  delay(1000);
+
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level
+  pinMode(TOUCH_IRQ, INPUT);
+  esp_deep_sleep_start();
+}
+
 void wifiConnect(){
   printf("Connexion au WiFi\n");
+  my_lcd.drawString("WiFi",xpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
@@ -62,10 +80,13 @@ void wifiConnect(){
     if(cnt>60000){
       printf("failed\r");
       cnt=0;a++;delay(600000);
-      printf("attempt#%d ",a);
+      printf("wait 10 min ; attempt#%d ",a);
+      char wifiMess[]={"KO     "};  
+      my_lcd.drawString(wifiMess,xpos+30, 10, 2);
     }
   }
-  printf("\nWiFi connecté !      \n");  
+  printf("\nWiFi connecté !      \n");
+  my_lcd.drawString("OK",xpos+30, 10, 2);  
 }
 
 int getTempo(uint8_t tt,char* d) {
@@ -92,12 +113,15 @@ int getTempo(uint8_t tt,char* d) {
     } 
     else {
       printf("Erreur parsing JSON (%c)",(char*)ttt[tt]);
+      
       numcolor=-100;
     }
   } 
   else {
     printf("Erreur HTTP (%c): %d\n", (char*)ttt[tt],httpCode);
     numcolor=httpCode;
+    my_lcd.setTextColor(RED);
+    my_lcd.drawString("Http",xpos+50, 10, 2);
   }
   http.end();  // Ferme la connexion HTTP
   return numcolor;
@@ -127,30 +151,44 @@ void tempo(uint8_t when){
     my_lcd.fillRect(rectx[when],recty[when],rectw[when],recth[when],dayColor[dayC]);
     my_lcd.setTextColor(txtColor[dayC]);
     my_lcd.drawString(dl,txtx[when],txty[when],txts);
-    my_lcd.drawString(date,txtx[when]+8*strlen(dl),txty[when],txts);
+    char datefr[]={date[8],date[9],'-',date[5],date[6],'-',date[0],date[1],date[2],date[3],'\0'};
+    my_lcd.drawString(datefr,txtx[when]+8*strlen(dl),txty[when],txts);
+  }
+  else {
+    delay(5000);
   }
 }
 
 void setup() {
 
-  Serial.begin(115200); // Démarre la console série
-  delay(2000);
-  Serial.println("+test tempo ");
-
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("+test tempo with deepSleep v1.1");
+  delay(200);
+  
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
-  my_lcd.setRotation(0);
-  
+  my_lcd.setRotation(0);  
   my_lcd.setTextColor(BLUE);
-  my_lcd.drawString("ST7789", 0,10,2); 
+  my_lcd.setTextColor(YELLOW, BLACK);
   
-  my_touch.setCal(495, 3398, 721, 3448, 320, 240, 1);
-  my_touch.setRotation(0);
+  char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
+  my_lcd.drawString(vers, 0, 10, 2); 
+  
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
+    my_lcd.drawString("Wakeup by TOUCH!", 40, 10, 2); 
+  } else
+  {
+    my_lcd.drawString("Boot normal", 40, 10, 2);
+  }
 
   wifiConnect();
   
   tempo(TODAY);
   tempo(TOMORROW);
+  
+  delay(10000);
+  goToSleep();
   
 }
 
