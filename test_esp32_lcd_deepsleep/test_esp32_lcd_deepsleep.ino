@@ -38,7 +38,6 @@ void setup() {
   Serial.println("+test sleep");
   delay(1000);
 
-  // Detect if we woke from deep sleep
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
   //if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
     lcd.init();
