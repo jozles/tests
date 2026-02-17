@@ -9,8 +9,6 @@
 
 #define VERSION "1.1\0"
 
-#define VOLTAGE_PIN 34
-
 #define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
 #define TOUCH_CS  33
 #define TOUCH_SCK 25
@@ -39,23 +37,27 @@ const char* validColors="Bleu BlancRougeInconnu";
 // https://www.api-couleur-tempo.fr
 // ***********************************
 
-// Renvoie la couleur du jour
+// ****** urls
+
 const char* urlToday = "https://www.api-couleur-tempo.fr/api/jourTempo/today";
-const char* tToday = "today";
-#define TODAY 0
-// Renvoie la couleur de demain
 const char* urlTomorrow = "https://www.api-couleur-tempo.fr/api/jourTempo/tomorrow";
-const char* tTomorrow = "tomorrow";
-#define TOMORROW 1
 
 const char* url[]={urlToday,urlTomorrow};
+
+// ****** pour debug
+
+const char* tToday = "today";
+const char* tTomorrow = "tomorrow";
 const char* ttt[]={tToday,tTomorrow};
 
-// dimensions
+// ****** positions/dimensions pavés jours
+
 uint16_t rectx[]={0,0},recth[]={170,125},recty[]={30,5+30+recth[0]},rectw[]={TFT_WIDTH,TFT_WIDTH},txtx[]={rectx[0]+2,rectx[1]+2},txty[]={recty[0]+10,recty[1]+10};
 uint8_t txts=2;
 
 char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0samedi\0 \0"};
+
+// ***** batterie
 
 #define BATX 220
 #define BATY 4
@@ -69,7 +71,9 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 #define VPMAX 4.20
 #define VPMIN 3.20
 
-uint16_t xpos=160;
+#define VOLTAGE_PIN 34
+
+uint16_t wifiXpos=135;  // position x message wifi
 
 void goToSleep() {
   my_lcd.fillRect(0,0,BATX-1,25,BLACK);
@@ -80,6 +84,10 @@ void goToSleep() {
   delay(1000);
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level
+  
+  const uint64_t uS = 3600ULL * 1000000ULL;                 // microsec delay
+  esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
+
   pinMode(TOUCH_IRQ, INPUT);
   esp_deep_sleep_start();
 }
@@ -87,12 +95,12 @@ void goToSleep() {
 bool wifiConnect(){
   char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
   printf("Connexion au WiFi\n");
-  my_lcd.drawString("WiFi",xpos, 10, 2);
+  my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
     delay(wait);printf(".");
-    my_lcd.drawString(wifiWait+((cnt/wait)%2)*2,xpos+30, 10, 2);
+    my_lcd.drawString(wifiWait+((cnt/wait)%2)*2,wifiXpos+30, 10, 2);
     cnt+=wait;
     if(cnt>30000){
       printf("failed\r");
@@ -101,16 +109,18 @@ bool wifiConnect(){
       //delay(600000);
       char wifiMess[]={"WiFi KO"};
       my_lcd.setTextColor(RED, BLACK);  
-      my_lcd.drawString(wifiMess,xpos, 10, 2);
+      my_lcd.drawString(wifiMess,wifiXpos, 10, 2);
       delay(5000);return false;
     }
   }
   printf("\nWiFi connecté !\n");
-  my_lcd.drawString("OK",xpos+30, 10, 2);
+  my_lcd.drawString("OK",wifiXpos+30, 10, 2);
   return true;  
 }
 
-int getTempo(uint8_t tt,char* d) {
+// ****** acquisition n° couleur du jour
+
+int getTempo(uint8_t tt,char* d) {      
   Serial.println((char*)url[tt]);
   
   const char* color="Inconnu";
@@ -142,13 +152,13 @@ int getTempo(uint8_t tt,char* d) {
     printf("Erreur HTTP (%c): %d\n", (char*)ttt[tt],httpCode);
     numcolor=httpCode;
     my_lcd.setTextColor(RED);
-    my_lcd.drawString("Http",xpos+50, 10, 2);
+    my_lcd.drawString("Http",wifiXpos+50, 10, 2);
   }
   http.end();  // Ferme la connexion HTTP
   return numcolor;
 }
 
-int8_t dow(char* date){
+int8_t dow(char* date){   // n° jour de la semaine
   uint8_t monthl[]={31,28,31,30,31,30,31,31,30,31,30}; 
   uint8_t yy=(date[2]-48)*10+date[3]-48;if(yy>50){return-1;} // yy 
   uint8_t my=(date[5]-48)*10+date[6]-48;if(my<0 || my>11){return-1;} // mm
@@ -160,14 +170,17 @@ int8_t dow(char* date){
   return ndow;
 }
 
-void tempo(uint8_t when){
+#define TODAY 0
+#define TOMORROW 1
+
+void tempo(uint8_t when){     // when = TODAY ou TOMORROW
   #define LD 12
   char date[LD];
   memset(date,0x00,LD);
   uint16_t dayC=3;
   dayC=getTempo(when,date);
-  char* dl=(sdow+9*dow(date));
-  printf("dayC : %d ; %s %s\n",dayC,dl,date);
+  char* dl=(sdow+9*dow(date));    // texte jour de la semaine
+  printf("dayC :%d ; %s %s\n",dayC,dl,date);
   if(dayC>=0){
     my_lcd.fillRect(rectx[when],recty[when],rectw[when],recth[when],dayColor[dayC]);
     my_lcd.setTextColor(txtColor[dayC]);
@@ -181,17 +194,47 @@ void tempo(uint8_t when){
 }
 
 float voltage(uint8_t vp){
-    float vbat=3.8;
-    my_lcd.fillRect(BATX+BATPINW,BATY-BATPINH,BATPINW,BATPINH,BATCOL);        
-    my_lcd.fillRect(BATX,BATY,BATW,BATH,BATCOL);      //drawRoundRect(BATX,BATY,BATW,BATH,2,BATCOL);
+    // ****** mesure tension
+    esp_adc_cal_characteristics_t adc_chars;
+    esp_adc_cal_value_t val_type=esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+    uint32_t raw=analogRead(VOLTAGE_PIN);
+    float vbat=(float)(esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2)/1000;
+  
+    // ****** affichage tension
+    my_lcd.setRotation(3);
+    my_lcd.drawFloat(vbat,2,TFT_HEIGHT-BATH-2,BATX-10,1);    // tension
+    my_lcd.setRotation(0);
+    
+    // ****** affichage picto
+    uint16_t powcol=POWCOL,batcol=BATCOL;
+    if(vbat<=VPMIN+.1){powcol=RED;batcol=RED;}
+    my_lcd.fillRect(BATX+BATPINW,BATY-BATPINH,BATPINW,BATPINH,batcol);        
+    my_lcd.fillRect(BATX,BATY,BATW,BATH,batcol);      //drawRoundRect(BATX,BATY,BATW,BATH,2,batcol);
     my_lcd.fillRect(BATX+BATLINE,BATY+BATLINE,BATW-2*BATLINE,BATH-2*BATLINE,BLACK);
-    uint8_t powh=BATH-2*BATLINE-8; //(int)((vbat-VPMIN)/(VPMAX-VPMIN))*(BATH-2*BATLINE);
+    uint8_t powh=BATH-2*BATLINE-(int)(((vbat-VPMIN)/(VPMAX-VPMIN))*(BATH-2*BATLINE));
     uint8_t powx=BATX+BATLINE;
     uint8_t powy=BATY+BATLINE+powh;
-    my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,POWCOL);
+    my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,powcol);
     
-    printf("powx:%d powh:%d\n",powx,powh);delay(1000);
+    printf("vbat:%fV powx:%d powh:%d\n",vbat,powx,powh);delay(1000);
     return vbat;
+}
+
+void bootReason()
+{
+  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  #define REASL 12
+  char reasont[]={"Touch boot \0Timed boot \0PowerOn boot"};
+  uint8_t reason=2;
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0:  reason=0;break;
+    case ESP_SLEEP_WAKEUP_TIMER: reason=1;break;
+    default: reason=2;break;
+  }
+  char* rt=reasont+REASL*reason;
+  my_lcd.drawString(rt,32, 10, 2);
+  printf("%s",rt);
 }
 
 void setup() {
@@ -210,12 +253,7 @@ void setup() {
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
   
-  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
-    my_lcd.drawString("Touch wakeup", 40, 10, 2); 
-  } else
-  {
-    my_lcd.drawString("Boot normal", 40, 10, 2);
-  }
+  bootReason();
   
   voltage(VOLTAGE_PIN);
 
@@ -224,7 +262,7 @@ void setup() {
   tempo(TODAY);
   tempo(TOMORROW);
   
-  delay(10000);
+  delay(20000);
   goToSleep();
   
 }
