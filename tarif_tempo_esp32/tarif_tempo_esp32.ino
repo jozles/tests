@@ -5,8 +5,11 @@
 #include <SPI.h>
 #include "font.h"
 #include <TFT_Touch.h>
+#include <esp_adc_cal.h>
 
 #define VERSION "1.1\0"
+
+#define VOLTAGE_PIN 34
 
 #define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
 #define TOUCH_CS  33
@@ -49,19 +52,31 @@ const char* url[]={urlToday,urlTomorrow};
 const char* ttt[]={tToday,tTomorrow};
 
 // dimensions
-uint16_t rectx[]={0,0},recth[]={200,100},recty[]={30,30+recth[0]},rectw[]={TFT_WIDTH,TFT_WIDTH},txtx[]={rectx[0]+2,rectx[1]+2},txty[]={recty[0]+10,recty[1]+10};
+uint16_t rectx[]={0,0},recth[]={170,125},recty[]={30,5+30+recth[0]},rectw[]={TFT_WIDTH,TFT_WIDTH},txtx[]={rectx[0]+2,rectx[1]+2},txty[]={recty[0]+10,recty[1]+10};
 uint8_t txts=2;
 
 char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0samedi\0 \0"};
 
+#define BATX 220
+#define BATY 4
+#define BATH 25
+#define BATW 12
+#define BATPINH 3
+#define BATPINW BATW/3
+#define BATCOL WHITE
+#define POWCOL GREEN
+#define BATLINE 2
+#define VPMAX 4.20
+#define VPMIN 3.20
+
 uint16_t xpos=160;
 
 void goToSleep() {
-  my_lcd.fillRect(0,0,TFT_WIDTH,25,BLACK);
+  my_lcd.fillRect(0,0,BATX-1,25,BLACK);
   my_lcd.setTextColor(GREEN, BLACK);
   my_lcd.drawString("Going to sleep...", 0, 10, 2);
   delay(2500);
-  my_lcd.drawString("sleeping...      ", 0, 10, 2);
+  my_lcd.drawString("sleeping...       ", 0, 10, 2);
   delay(1000);
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level
@@ -69,24 +84,30 @@ void goToSleep() {
   esp_deep_sleep_start();
 }
 
-void wifiConnect(){
+bool wifiConnect(){
+  char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
   printf("Connexion au WiFi\n");
   my_lcd.drawString("WiFi",xpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
     delay(wait);printf(".");
+    my_lcd.drawString(wifiWait+((cnt/wait)%2)*2,xpos+30, 10, 2);
     cnt+=wait;
-    if(cnt>60000){
+    if(cnt>30000){
       printf("failed\r");
-      cnt=0;a++;delay(600000);
-      printf("wait 10 min ; attempt#%d ",a);
-      char wifiMess[]={"KO     "};  
-      my_lcd.drawString(wifiMess,xpos+30, 10, 2);
+      //cnt=0;a++;
+      //printf("wait 10 min ; attempt#%d ",a);
+      //delay(600000);
+      char wifiMess[]={"WiFi KO"};
+      my_lcd.setTextColor(RED, BLACK);  
+      my_lcd.drawString(wifiMess,xpos, 10, 2);
+      delay(5000);return false;
     }
   }
-  printf("\nWiFi connecté !      \n");
-  my_lcd.drawString("OK",xpos+30, 10, 2);  
+  printf("\nWiFi connecté !\n");
+  my_lcd.drawString("OK",xpos+30, 10, 2);
+  return true;  
 }
 
 int getTempo(uint8_t tt,char* d) {
@@ -159,6 +180,20 @@ void tempo(uint8_t when){
   }
 }
 
+float voltage(uint8_t vp){
+    float vbat=3.8;
+    my_lcd.fillRect(BATX+BATPINW,BATY-BATPINH,BATPINW,BATPINH,BATCOL);        
+    my_lcd.fillRect(BATX,BATY,BATW,BATH,BATCOL);      //drawRoundRect(BATX,BATY,BATW,BATH,2,BATCOL);
+    my_lcd.fillRect(BATX+BATLINE,BATY+BATLINE,BATW-2*BATLINE,BATH-2*BATLINE,BLACK);
+    uint8_t powh=BATH-2*BATLINE-8; //(int)((vbat-VPMIN)/(VPMAX-VPMIN))*(BATH-2*BATLINE);
+    uint8_t powx=BATX+BATLINE;
+    uint8_t powy=BATY+BATLINE+powh;
+    my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,POWCOL);
+    
+    printf("powx:%d powh:%d\n",powx,powh);delay(1000);
+    return vbat;
+}
+
 void setup() {
 
   Serial.begin(115200);
@@ -173,16 +208,18 @@ void setup() {
   my_lcd.setTextColor(YELLOW, BLACK);
   
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
-  my_lcd.drawString(vers, 0, 10, 2); 
+  my_lcd.drawString(vers, 1, 10, 2); 
   
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
-    my_lcd.drawString("Wakeup by TOUCH!", 40, 10, 2); 
+    my_lcd.drawString("Touch wakeup", 40, 10, 2); 
   } else
   {
     my_lcd.drawString("Boot normal", 40, 10, 2);
   }
+  
+  voltage(VOLTAGE_PIN);
 
-  wifiConnect();
+  if(!wifiConnect()){goToSleep();};
   
   tempo(TODAY);
   tempo(TOMORROW);
