@@ -6,6 +6,7 @@
 #include "font.h"
 #include <TFT_Touch.h>
 #include <esp_adc_cal.h>
+#include "udp_ntp.h"
 
 #define VERSION "1.1\0"
 
@@ -32,6 +33,8 @@ const uint16_t txtColor[]={BLACK,BLUE,BLACK,WHITE};
 const char* validColors="Bleu BlancRougeInconnu";
 #define LENVCOLOR 5
 
+char* chexa={"0123456789ABCDEF"};
+
 // ***********************************
 // URL DE L’API TEMPO
 // https://www.api-couleur-tempo.fr
@@ -52,7 +55,16 @@ const char* ttt[]={tToday,tTomorrow};
 
 // ****** positions/dimensions pavés jours
 
-uint16_t rectx[]={0,0},recth[]={170,125},recty[]={30,5+30+recth[0]},rectw[]={TFT_WIDTH,TFT_WIDTH},txtx[]={rectx[0]+2,rectx[1]+2},txty[]={recty[0]+10,recty[1]+10};
+#define RECT_TODAY_X 0
+#define RECT_TODAY_Y 60
+#define RECT_TODAY_W TFT_WIDTH
+#define RECT_TODAY_H 150
+#define SEP_LINE_H 5
+#define RECT_TOMORROW_X RECT_TODAY_X
+#define RECT_TOMORROW_Y RECT_TODAY_Y+RECT_TODAY_H+SEP_LINE_H
+#define RECT_TOMORROW_H 110
+
+uint16_t rectx[]={RECT_TODAY_X,RECT_TOMORROW_X},recth[]={RECT_TODAY_H,RECT_TOMORROW_H},recty[]={RECT_TODAY_Y,RECT_TOMORROW_Y},rectw[]={TFT_WIDTH,TFT_WIDTH},txtx[]={rectx[0]+2,rectx[1]+2},txty[]={recty[0]+10,recty[1]+10};
 uint8_t txts=2;
 
 char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0samedi\0 \0"};
@@ -75,13 +87,29 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 
 uint16_t wifiXpos=135;  // position x message wifi
 
+// ****** udp/ntp
+
+
+
+byte js=0;
+uint32_t amj=0, hms=0;
+
+void sleep_ms(uint32_t ms){
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  btStop();
+  uint64_t us=(uint64_t)ms*1000ULL;
+  esp_sleep_enable_timer_wakeup(us);
+  esp_light_sleep_start();
+}
+
 void goToSleep() {
   my_lcd.fillRect(0,0,BATX-1,25,BLACK);
   my_lcd.setTextColor(GREEN, BLACK);
   my_lcd.drawString("Going to sleep...", 0, 10, 2);
-  delay(2500);
+  sleep_ms(2500);
   my_lcd.drawString("sleeping...       ", 0, 10, 2);
-  delay(1000);
+  sleep_ms(1000);
 
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level
   
@@ -99,18 +127,20 @@ bool wifiConnect(){
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
-    delay(wait);printf(".");
+    //sleep_ms(wait);
+    delay(wait);
+    printf(".");
     my_lcd.drawString(wifiWait+((cnt/wait)%2)*2,wifiXpos+30, 10, 2);
     cnt+=wait;
     if(cnt>30000){
       printf("failed\r");
       //cnt=0;a++;
       //printf("wait 10 min ; attempt#%d ",a);
-      //delay(600000);
+      //sleep_ms(600000);
       char wifiMess[]={"WiFi KO"};
       my_lcd.setTextColor(RED, BLACK);  
       my_lcd.drawString(wifiMess,wifiXpos, 10, 2);
-      delay(5000);return false;
+      sleep_ms(5000);return false;
     }
   }
   printf("\nWiFi connecté !\n");
@@ -189,7 +219,7 @@ void tempo(uint8_t when){     // when = TODAY ou TOMORROW
     my_lcd.drawString(datefr,txtx[when]+8*strlen(dl),txty[when],txts);
   }
   else {
-    delay(5000);
+    sleep_ms(5000);
   }
 }
 
@@ -216,7 +246,7 @@ float voltage(uint8_t vp){
     uint8_t powy=BATY+BATLINE+powh;
     my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,powcol);
     
-    printf("vbat:%fV powx:%d powh:%d\n",vbat,powx,powh);delay(1000);
+    printf("vbat:%fV powx:%d powh:%d\n",vbat,powx,powh);sleep_ms(1000);
     return vbat;
 }
 
@@ -240,9 +270,9 @@ void bootReason()
 void setup() {
 
   Serial.begin(115200);
-  delay(200);
+  sleep_ms(200);
   Serial.println("+test tempo with deepSleep v1.1");
-  delay(200);
+  sleep_ms(200);
   
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
@@ -259,14 +289,41 @@ void setup() {
 
   if(!wifiConnect()){goToSleep();};
   
+  if(!getUDPdate(&hms,&amj,&js)){
+    printf("udp_ntp ko\n");
+    my_lcd.drawString("ntp KO",0,RECT_TODAY_Y-30,txts);
+  }
+  else {
+    char dd[64];
+    memcpy(dd,(char*)(sdow+9*js),8);dd[8]=' ';convIntToString(&dd[9],amj);dd[17]=' ';convIntToString(&dd[18],hms);memcpy(&dd[24]," GMT\0",5);
+    my_lcd.drawString(dd,0,RECT_TODAY_Y-30,txts);
+    Serial.print(js);Serial.print(" ");Serial.print(amj);Serial.print(" ");Serial.print(hms);Serial.println(" GMT");
+  }
+  
   tempo(TODAY);
   tempo(TOMORROW);
   
-  delay(20000);
+  sleep_ms(20000);
   goToSleep();
   
 }
 
 void loop(){}
 
+int convIntToString(char* str,int32_t num,uint8_t len)
+{
+  int i=0,t=0,num0=num;
+  if(num<0){i=1;str[0]='-';}
+  while(num0!=0){num0/=10;i++;}             // comptage nbre chiffres partie entière
+  if(len!=0){i=len;}                        // len!=0 complète avec des 0 ou troncate
+  t=i;
+  for (i=i;i>0;i--){num0=num%10;num/=10;str[i-1]=chexa[num0];}
+  str[t]='\0';
+  if(str[0]=='\0'){str[0]='0';}
+  return t;
+}
 
+int convIntToString(char* str,int32_t num)
+{
+  return convIntToString(str,num,0);
+}
