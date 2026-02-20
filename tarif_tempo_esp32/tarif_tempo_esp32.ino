@@ -16,6 +16,11 @@
 #define TOUCH_DIN 32
 #define TOUCH_DOUT 39
 
+#define TOUCH_PAD 4   //27
+#define GPIO_TOUCH_PAD GPIO_NUM_4
+#define AUDIO_ENABLE 26
+// #define BL 21
+
 TFT_eSPI my_lcd = TFT_eSPI(); 
 TFT_Touch my_touch = TFT_Touch(TOUCH_CS, TOUCH_SCK, TOUCH_DIN, TOUCH_DOUT);
 
@@ -71,6 +76,11 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 
 // ***** batterie
 
+// consos :
+//    en fonctionnement 100-200mA(wifi)
+//    lightSleep/deepSleep 70mA avec écran on ; 
+//    8mA avec écran off on pourrait alimenter depuis un mosfet l'ampli et le ch340 
+
 #define BATX 220
 #define BATY 4
 #define BATH 25
@@ -94,13 +104,14 @@ uint16_t wifiXpos=135;  // position x message wifi
 byte js=0;
 uint32_t amj=0, hms=0;
 
-void sleep_ms(uint32_t ms){
+void sleep_ms(uint32_t ms){         // ne sert à rien : le BL c'est 60mA et plus de 5mA en deepSleep le module (au lieu de 20uA l'esp32 seul)
+  //delay(ms);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   btStop();
   uint64_t us=(uint64_t)ms*1000ULL;
   esp_sleep_enable_timer_wakeup(us);
-  esp_light_sleep_start();
+  esp_light_sleep_start();//*/            // lightSleep pollue l'origine des reset
 }
 
 void goToSleep() {
@@ -111,18 +122,40 @@ void goToSleep() {
   my_lcd.drawString("sleeping...       ", 0, 10, 2);
   sleep_ms(1000);
 
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
+  //esp_sleep_enable_ext1_wakeup(1ULL << TOUCH_IRQ, ESP_EXT1_WAKEUP_ALL_LOW);
   
-  const uint64_t uS = 3600ULL * 1000000ULL;                 // microsec delay
+  const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
+  
+  touchAttachInterrupt(T7, NULL,40);
+  esp_sleep_enable_touchpad_wakeup();                       // wakeUp on touchPin
+  delay(100);
 
+  pinMode(AUDIO_ENABLE,INPUT);  // high with pullup (disable)
+  //digitalWrite(AUDIO_ENABLE,HIGH);
+  
+  my_lcd.writecommand(0x10);  // lcd sleep
+  delay(5);
+  
+  pinMode(TFT_MOSI, INPUT);   // disable spi lcd
+  pinMode(TFT_SCLK, INPUT);
+  pinMode(TFT_CS,   INPUT);
+  pinMode(TFT_DC,   INPUT);
+  pinMode(TFT_RST,  INPUT);
+  
+  pinMode(TOUCH_DOUT, INPUT);   // disable spi touch
+  pinMode(TOUCH_SCK, INPUT);
+  pinMode(TOUCH_CS,   INPUT);
+  
   pinMode(TOUCH_IRQ, INPUT);
-  esp_deep_sleep_start();
+
+  esp_deep_sleep_start();       // mesuré env 285uA  ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
 }
 
 bool wifiConnect(){
   char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
-  printf("Connexion au WiFi\n");
+  printf("Connexion au WiFi ");
   my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
@@ -137,13 +170,13 @@ bool wifiConnect(){
       //cnt=0;a++;
       //printf("wait 10 min ; attempt#%d ",a);
       //sleep_ms(600000);
-      char wifiMess[]={"WiFi KO"};
+      char wifiMess[]={"WiFi KO  "};
       my_lcd.setTextColor(RED, BLACK);  
       my_lcd.drawString(wifiMess,wifiXpos, 10, 2);
       sleep_ms(5000);return false;
     }
   }
-  printf("\nWiFi connecté !\n");
+  printf(" connecté !\n");
   my_lcd.drawString("OK",wifiXpos+30, 10, 2);
   return true;  
 }
@@ -151,7 +184,7 @@ bool wifiConnect(){
 // ****** acquisition n° couleur du jour
 
 int getTempo(uint8_t tt,char* d) {      
-  Serial.println((char*)url[tt]);
+  printf("%s\n",url[tt]);
   
   const char* color="Inconnu";
   int numcolor=-1;
@@ -169,8 +202,8 @@ int getTempo(uint8_t tt,char* d) {
 
       color = doc["libCouleur"];  // Lit la valeur "couleur"
       strcpy(d,doc["dateJour"] | "INCONNU");
-      printf("%s : %s ; date : %s\n",(char*)ttt[tt],color,d);
       numcolor=(strstr(validColors,color)-validColors)/LENVCOLOR;
+      printf("%s :%d %s ; date : %s ",(char*)ttt[tt],numcolor,color,d);
     } 
     else {
       printf("Erreur parsing JSON (%c)",(char*)ttt[tt]);
@@ -210,7 +243,7 @@ void tempo(uint8_t when){     // when = TODAY ou TOMORROW
   uint16_t dayC=3;
   dayC=getTempo(when,date);
   char* dl=(sdow+9*dow(date));    // texte jour de la semaine
-  printf("dayC :%d ; %s %s\n",dayC,dl,date);
+  printf(" %s \n",dl);
   if(dayC>=0){
     my_lcd.fillRect(rectx[when],recty[when],rectw[when],recth[when],dayColor[dayC]);
     my_lcd.setTextColor(txtColor[dayC]);
@@ -246,23 +279,41 @@ float voltage(uint8_t vp){
     uint8_t powy=BATY+BATLINE+powh;
     my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,powcol);
     
-    printf("vbat:%fV powx:%d powh:%d\n",vbat,powx,powh);sleep_ms(1000);
+    printf("vbat:%1.2fV powx:%d powh:%d\n",vbat,powx,powh);sleep_ms(1000);
     return vbat;
 }
 
 void bootReason()
 {
   esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+  esp_reset_reason_t reset_reason = esp_reset_reason();
 
-  #define REASL 12
-  char reasont[]={"Touch boot \0Timed boot \0PowerOn boot"};
+  #define REASL 13
+  char reasont[]={"Touch Screen\0Timed boot  \0PowerOn rst \0Touch Pad   \0Soft reset  \0Panic reset \0Watchdog rst\0Brownout rst\0External rst\0Other reset \0"};
+ 
   uint8_t reason=2;
-  switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0:  reason=0;break;
-    case ESP_SLEEP_WAKEUP_TIMER: reason=1;break;
-    default: reason=2;break;
+  switch(reset_reason){
+    case ESP_RST_DEEPSLEEP:
+        switch (wakeup_reason){
+            case ESP_SLEEP_WAKEUP_EXT0:  reason=0;break;
+            case ESP_SLEEP_WAKEUP_TIMER: reason=1;break;
+            case ESP_SLEEP_WAKEUP_TOUCHPAD:reason=3;break;
+            default: reason=2;break;
+        }break;
+    case ESP_RST_POWERON: reason=2;break;
+    case ESP_RST_SW:      reason=4;break;
+    case ESP_RST_PANIC:   reason=5;break;
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:     reason=6;break;
+    case ESP_RST_BROWNOUT:reason=7;break;
+    case ESP_RST_EXT:     reason=8;break;
+    default:              reason=9;break;
   }
+
   char* rt=reasont+REASL*reason;
+  printf("reason:%d\n",wakeup_reason);
+  dumpstr(reasont,37);
   my_lcd.drawString(rt,32, 10, 2);
   printf("%s",rt);
 }
@@ -270,9 +321,9 @@ void bootReason()
 void setup() {
 
   Serial.begin(115200);
-  sleep_ms(200);
-  Serial.println("+test tempo with deepSleep v1.1");
-  sleep_ms(200);
+  //sleep_ms(1000);
+  delay(1000);      // pas de lightSleep avant bootReason() !
+  printf("\n+tarif tempo with deepSleep v1.1\n");
   
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
@@ -280,9 +331,17 @@ void setup() {
   my_lcd.setTextColor(BLUE);
   my_lcd.setTextColor(YELLOW, BLACK);
   
+  
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
   
+  SPI.end();
+  gpio_reset_pin(GPIO_TOUCH_PAD);
+  pinMode(TOUCH_PAD, INPUT);
+  my_lcd.setRotation(3);
+  my_lcd.drawNumber(touchRead(T7),TFT_HEIGHT-60,TFT_WIDTH-10,1);  // touchPad
+  my_lcd.setRotation(0);
+
   bootReason();
   
   voltage(VOLTAGE_PIN);
@@ -291,19 +350,24 @@ void setup() {
   
   if(!getUDPdate(&hms,&amj,&js)){
     printf("udp_ntp ko\n");
+    my_lcd.setTextColor(RED);
     my_lcd.drawString("ntp KO",0,RECT_TODAY_Y-30,txts);
+    my_lcd.setTextColor(BLACK);
   }
   else {
     char dd[64];
-    memcpy(dd,(char*)(sdow+9*js),8);dd[8]=' ';convIntToString(&dd[9],amj);dd[17]=' ';convIntToString(&dd[18],hms);memcpy(&dd[24]," GMT\0",5);
+    memcpy(dd,(char*)(sdow+9*js),8);
+    uint8_t dp=strlen(dd);dd[dp]=' ';convIntToString(&dd[dp+1],amj);dd[dp+9]=' ';convIntToString(&dd[dp+10],hms);memcpy(&dd[dp+16]," GMT\n\0",5);
     my_lcd.drawString(dd,0,RECT_TODAY_Y-30,txts);
-    Serial.print(js);Serial.print(" ");Serial.print(amj);Serial.print(" ");Serial.print(hms);Serial.println(" GMT");
+    printf("%s",dd);
   }
+  
   
   tempo(TODAY);
   tempo(TOMORROW);
   
   sleep_ms(20000);
+
   goToSleep();
   
 }
@@ -326,4 +390,14 @@ int convIntToString(char* str,int32_t num,uint8_t len)
 int convIntToString(char* str,int32_t num)
 {
   return convIntToString(str,num,0);
+}
+
+void dumpstr(char* str,uint8_t len){
+  printf("\n");
+  for(uint8_t i=0;i<len;i++){
+    printf("%c:",str[i]);
+    printf("%c",chexa[str[i]>>4]);
+    printf("%c ",chexa[str[i]&0x0f]);
+    }
+  printf("\n");
 }
