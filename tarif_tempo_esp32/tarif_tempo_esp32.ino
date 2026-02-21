@@ -128,16 +128,18 @@ void goToSleep() {
   sleep_ms(1000);
 
   //pinMode(TOUCH_IRQ, INPUT);
-  //esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
   //esp_sleep_enable_ext1_wakeup(1ULL << TOUCH_IRQ, ESP_EXT1_WAKEUP_ALL_LOW);
   
-  const uint64_t uS = 24ULL  * 1000000ULL;         // microsec delay * 3600ULL
+  my_touch._OutputData(0x90);  // touch sleep
+  delay(5);
+  
+  const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay * 3600ULL
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
   
-  //pinMode(PAD_PIN, INPUT);
-  /*touchAttachInterrupt(PAD_INPUT, onTouch,700);
-  esp_sleep_enable_touchpad_wakeup();
-  delay(100);*/
+  //touchAttachInterrupt(PAD_INPUT, onTouch,700);
+  //esp_sleep_enable_touchpad_wakeup();
+  //delay(100);
 
   //pinMode(AUDIO_ENABLE,INPUT);  // high with pullup (disable)
   //digitalWrite(AUDIO_ENABLE,HIGH);
