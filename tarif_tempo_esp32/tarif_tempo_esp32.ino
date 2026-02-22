@@ -5,10 +5,13 @@
 #include <SPI.h>
 #include "font.h"
 #include <TFT_Touch.h>
+
 #include <esp_adc_cal.h>
 #include "udp_ntp.h"
 
 #define VERSION "1.1\0"
+
+#define WAKEUP_TOUCH_SOURCE SCREEN  // SCREEN / PAD
 
 #define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
 #define TOUCH_CS  33
@@ -100,8 +103,6 @@ uint16_t wifiXpos=130;  // position x message wifi
 
 // ****** udp/ntp
 
-
-
 byte js=0;
 uint32_t amj=0, hms=0;
 
@@ -127,19 +128,22 @@ void goToSleep() {
   my_lcd.drawString("sleeping...       ", 0, 10, 2);
   sleep_ms(1000);
 
-  //pinMode(TOUCH_IRQ, INPUT);
+  #if WAKEUP_TOUCH_SOURCE == SCREEN
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
   //esp_sleep_enable_ext1_wakeup(1ULL << TOUCH_IRQ, ESP_EXT1_WAKEUP_ALL_LOW);
+  #endif // WAKEUP_TOUCH_SOURCE
   
-  my_touch._OutputData(0x90);  // touch sleep
+  my_touch._OutputData(0xB0);  // touch sleep
   delay(5);
   
+  #if WAKEUP_TOUCH_SOURCE == PAD
+  touchAttachInterrupt(PAD_INPUT, onTouch,700);
+  esp_sleep_enable_touchpad_wakeup();
+  delay(100);
+  #endif // WAKEUP_TOUCH_SOURCE
+    
   const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay * 3600ULL
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
-  
-  //touchAttachInterrupt(PAD_INPUT, onTouch,700);
-  //esp_sleep_enable_touchpad_wakeup();
-  //delay(100);
 
   //pinMode(AUDIO_ENABLE,INPUT);  // high with pullup (disable)
   //digitalWrite(AUDIO_ENABLE,HIGH);
@@ -153,9 +157,9 @@ void goToSleep() {
   pinMode(TFT_DC,   INPUT);
   pinMode(TFT_RST,  INPUT);
   
-  pinMode(TOUCH_DOUT, INPUT);   // disable spi touch
+  pinMode(TOUCH_DOUT,INPUT);   // disable spi touch
   pinMode(TOUCH_SCK, INPUT);
-  pinMode(TOUCH_CS,   INPUT);
+  pinMode(TOUCH_CS,  INPUT);
   
   esp_deep_sleep_start();       // mesuré env 285uA  ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
 }
@@ -338,16 +342,13 @@ void setup() {
   my_lcd.setRotation(0);  
   my_lcd.setTextColor(BLUE);
   my_lcd.setTextColor(YELLOW, BLACK);
-  
-  
+   
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
   
-  gpio_reset_pin(GPIO_TOUCH_PIN);
-  pinMode(PAD_PIN, INPUT);
-  my_lcd.setRotation(3);
-  my_lcd.drawNumber(touchRead(PAD_INPUT),TFT_HEIGHT-58,TFT_WIDTH-10,1);  // touchPad
-  my_lcd.setRotation(0);
+  //my_lcd.setRotation(3);
+  //my_lcd.drawNumber(touchRead(PAD_INPUT),TFT_HEIGHT-58,TFT_WIDTH-10,1);  // touchPad level measure
+  //my_lcd.setRotation(0);
 
   bootReason();
   
