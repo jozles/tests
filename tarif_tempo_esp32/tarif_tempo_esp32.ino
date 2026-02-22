@@ -135,7 +135,7 @@ void goToSleep() {
   #endif
     
   #if WAKEUP_TOUCH_SRCE==PAD
-  touchAttachInterrupt(T7, onTouch(),700);
+  touchAttachInterrupt(T7, onTouch,700);
   esp_sleep_enable_touchpad_wakeup();                       // wakeUp on touchPin
   delay(100);
   #endif
