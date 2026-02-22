@@ -10,14 +10,19 @@
 
 #define VERSION "1.1\0"
 
+#define SCREEN 1
+#define PAD 0
+#define WAKEUP_TOUCH_SRCE PAD  // SCREEN/PAD
+
 #define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
 #define TOUCH_CS  33
 #define TOUCH_SCK 25
 #define TOUCH_DIN 32
 #define TOUCH_DOUT 39
 
-#define TOUCH_PAD 4   //27
-#define GPIO_TOUCH_PAD GPIO_NUM_4
+#define TOUCH_PAD 27
+#define GPIO_TOUCH_PAD GPIO_NUM_27
+
 #define AUDIO_ENABLE 26
 // #define BL 21
 
@@ -78,8 +83,8 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 
 // consos :
 //    en fonctionnement 100-200mA(wifi)
-//    lightSleep/deepSleep 70mA avec écran on ; 
-//    8mA avec écran off on pourrait alimenter depuis un mosfet l'ampli et le ch340 
+//    lightSleep 70mA avec écran on ; 
+//    deepSleep 265uA dont 130uA ldo (replace with 3uA 7333) 
 
 #define BATX 220
 #define BATY 4
@@ -99,8 +104,6 @@ uint16_t wifiXpos=135;  // position x message wifi
 
 // ****** udp/ntp
 
-
-
 byte js=0;
 uint32_t amj=0, hms=0;
 
@@ -113,6 +116,9 @@ void sleep_ms(uint32_t ms){         // ne sert à rien : le BL c'est 60mA et plu
   esp_sleep_enable_timer_wakeup(us);
   esp_light_sleep_start();//*/            // lightSleep pollue l'origine des reset
 }
+  #if WAKEUP_TOUCH_SRCE==PAD
+void onTouch(){}
+  #endif
 
 void goToSleep() {
   my_lcd.fillRect(0,0,BATX-1,25,BLACK);
@@ -122,17 +128,22 @@ void goToSleep() {
   my_lcd.drawString("sleeping...       ", 0, 10, 2);
   sleep_ms(1000);
 
+  #if WAKEUP_TOUCH_SRCE==SCREEN
+  pinMode(TOUCH_IRQ, INPUT);
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
   //esp_sleep_enable_ext1_wakeup(1ULL << TOUCH_IRQ, ESP_EXT1_WAKEUP_ALL_LOW);
+  #endif
+    
+  #if WAKEUP_TOUCH_SRCE==PAD
+  touchAttachInterrupt(T7, onTouch(),700);
+  esp_sleep_enable_touchpad_wakeup();                       // wakeUp on touchPin
+  delay(100);
+  #endif
   
   const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
-  
-  touchAttachInterrupt(T7, NULL,40);
-  esp_sleep_enable_touchpad_wakeup();                       // wakeUp on touchPin
-  delay(100);
 
-  pinMode(AUDIO_ENABLE,INPUT);  // high with pullup (disable)
+  pinMode(AUDIO_ENABLE,INPUT);  // high with pcb pullup (disable)
   //digitalWrite(AUDIO_ENABLE,HIGH);
   
   my_lcd.writecommand(0x10);  // lcd sleep
@@ -144,11 +155,9 @@ void goToSleep() {
   pinMode(TFT_DC,   INPUT);
   pinMode(TFT_RST,  INPUT);
   
-  pinMode(TOUCH_DOUT, INPUT);   // disable spi touch
-  pinMode(TOUCH_SCK, INPUT);
-  pinMode(TOUCH_CS,   INPUT);
-  
-  pinMode(TOUCH_IRQ, INPUT);
+  pinMode(TOUCH_DOUT, INPUT_PULLUP);   // disable spi touch
+  pinMode(TOUCH_SCK,  INPUT_PULLUP);
+  pinMode(TOUCH_CS,   INPUT_PULLUP);
 
   esp_deep_sleep_start();       // mesuré env 285uA  ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
 }
@@ -335,12 +344,12 @@ void setup() {
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
   
-  SPI.end();
-  gpio_reset_pin(GPIO_TOUCH_PAD);
-  pinMode(TOUCH_PAD, INPUT);
-  my_lcd.setRotation(3);
-  my_lcd.drawNumber(touchRead(T7),TFT_HEIGHT-60,TFT_WIDTH-10,1);  // touchPad
-  my_lcd.setRotation(0);
+  //SPI.end();
+  //gpio_reset_pin(GPIO_TOUCH_PAD);
+  //pinMode(TOUCH_PAD, INPUT);
+  //my_lcd.setRotation(3);
+  //my_lcd.drawNumber(touchRead(T7),TFT_HEIGHT-60,TFT_WIDTH-10,1);  // touchPad measure ... add 300uA to deepSleep
+  //my_lcd.setRotation(0);
 
   bootReason();
   
