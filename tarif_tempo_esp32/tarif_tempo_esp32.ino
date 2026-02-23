@@ -8,11 +8,11 @@
 #include <esp_adc_cal.h>
 #include "udp_ntp.h"
 
-#define VERSION "1.1\0"
+#define VERSION "1.2\0"
 
 #define SCREEN 1
 #define PAD 0
-#define WAKEUP_TOUCH_SRCE PAD  // SCREEN/PAD
+#define WAKEUP_TOUCH_SRCE SCREEN  // SCREEN/PAD
 
 #define TOUCH_IRQ 36   // IO36 = EXT0 wakeup
 #define TOUCH_CS  33
@@ -81,10 +81,13 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 
 // ***** batterie
 
+#define LOW_BATTERY 3.35
+
 // consos :
 //    en fonctionnement 100-200mA(wifi)
 //    lightSleep 70mA avec écran on ; 
-//    deepSleep 265uA dont 130uA ldo (replace with 3uA 7333) 
+//    deepSleep mode SCREEN 57-63uA (chge 130uA ldo with 3uA 7333, 35uA ch340 power out, 20uA divider 100k with 4.5uA 430k) 
+//                   (sc8002b is 2uA with pin1 high)
 
 #define BATX 220
 #define BATY 4
@@ -107,27 +110,29 @@ uint16_t wifiXpos=135;  // position x message wifi
 byte js=0;
 uint32_t amj=0, hms=0;
 
-void sleep_ms(uint32_t ms){         // ne sert à rien : le BL c'est 60mA et plus de 5mA en deepSleep le module (au lieu de 20uA l'esp32 seul)
+void sleep_ms(uint32_t ms){         // ne sert à rien : le BL c'est 60mA 
   //delay(ms);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   btStop();
   uint64_t us=(uint64_t)ms*1000ULL;
   esp_sleep_enable_timer_wakeup(us);
-  esp_light_sleep_start();//*/            // lightSleep pollue l'origine des reset
+  esp_light_sleep_start();          // lightSleep pollue l'origine des reset
 }
   #if WAKEUP_TOUCH_SRCE==PAD
 void onTouch(){}
   #endif
 
-void goToSleep() {
-  my_lcd.fillRect(0,0,BATX-1,25,BLACK);
-  my_lcd.setTextColor(GREEN, BLACK);
-  my_lcd.drawString("Going to sleep...", 0, 10, 2);
-  sleep_ms(2500);
-  my_lcd.drawString("sleeping...       ", 0, 10, 2);
-  sleep_ms(1000);
-
+void goToSleep(bool fast) {
+  if(!fast){
+    my_lcd.fillRect(0,0,BATX-1,25,BLACK);
+    my_lcd.setTextColor(GREEN, BLACK);
+    my_lcd.drawString("Going to sleep...", 0, 10, 2);
+    sleep_ms(2500);
+    my_lcd.drawString("sleeping...       ", 0, 10, 2);
+    sleep_ms(1000);
+  }
+  
   #if WAKEUP_TOUCH_SRCE==SCREEN
   pinMode(TOUCH_IRQ, INPUT);
   esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);   // EXT0 wakeup on LOW level // voir sleep_ms
@@ -137,7 +142,7 @@ void goToSleep() {
   #if WAKEUP_TOUCH_SRCE==PAD
   touchAttachInterrupt(T7, onTouch,700);
   esp_sleep_enable_touchpad_wakeup();                       // wakeUp on touchPin
-  delay(100);
+  delay(5);
   #endif
   
   const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay
@@ -159,7 +164,8 @@ void goToSleep() {
   pinMode(TOUCH_SCK,  INPUT_PULLUP);
   pinMode(TOUCH_CS,   INPUT_PULLUP);
 
-  esp_deep_sleep_start();       // mesuré env 285uA  ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
+  esp_deep_sleep_start();       // mesuré env 57uA sans ch340, avec 7333, diviseur adc 430k:430k  
+                                // ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
 }
 
 bool wifiConnect(){
@@ -269,30 +275,32 @@ float voltage(uint8_t vp){
     // ****** mesure tension
     esp_adc_cal_characteristics_t adc_chars;
     esp_adc_cal_value_t val_type=esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-    uint32_t raw=analogRead(VOLTAGE_PIN);
+    uint32_t raw=analogRead(vp);
     float vbat=(float)(esp_adc_cal_raw_to_voltage(raw, &adc_chars) * 2)/1000;
-  
-    // ****** affichage tension
-    my_lcd.setRotation(3);
-    my_lcd.drawFloat(vbat,2,TFT_HEIGHT-BATH-2,BATX-10,1);    // tension
-    my_lcd.setRotation(0);
     
-    // ****** affichage picto
-    uint16_t powcol=POWCOL,batcol=BATCOL;
-    if(vbat<=VPMIN+.1){powcol=RED;batcol=RED;}
-    my_lcd.fillRect(BATX+BATPINW,BATY-BATPINH,BATPINW,BATPINH,batcol);        
-    my_lcd.fillRect(BATX,BATY,BATW,BATH,batcol);      //drawRoundRect(BATX,BATY,BATW,BATH,2,batcol);
-    my_lcd.fillRect(BATX+BATLINE,BATY+BATLINE,BATW-2*BATLINE,BATH-2*BATLINE,BLACK);
-    uint8_t powh=BATH-2*BATLINE-(int)(((vbat-VPMIN)/(VPMAX-VPMIN))*(BATH-2*BATLINE));
-    uint8_t powx=BATX+BATLINE;
-    uint8_t powy=BATY+BATLINE+powh;
-    my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,powcol);
+    vbat-=0.03;   // adjust env .5%
     
-    printf("vbat:%1.2fV powx:%d powh:%d\n",vbat,powx,powh);sleep_ms(1000);
+      // ****** affichage tension
+      my_lcd.setRotation(3);
+      my_lcd.drawFloat(vbat,2,TFT_HEIGHT-BATH-2,BATX-10,1);    // tension
+      my_lcd.setRotation(0);
+    
+      // ****** affichage picto
+      uint16_t powcol=POWCOL,batcol=BATCOL;
+      if(vbat<=VPMIN+.1){powcol=RED;batcol=RED;}
+      my_lcd.fillRect(BATX+BATPINW,BATY-BATPINH,BATPINW,BATPINH,batcol);        
+      my_lcd.fillRect(BATX,BATY,BATW,BATH,batcol);      //drawRoundRect(BATX,BATY,BATW,BATH,2,batcol);
+      my_lcd.fillRect(BATX+BATLINE,BATY+BATLINE,BATW-2*BATLINE,BATH-2*BATLINE,BLACK);
+      uint8_t powh=BATH-2*BATLINE-(int)(((vbat-VPMIN)/(VPMAX-VPMIN))*(BATH-2*BATLINE));
+      uint8_t powx=BATX+BATLINE;
+      uint8_t powy=BATY+BATLINE+powh;
+      my_lcd.fillRect(powx,powy,BATW-2*BATLINE,BATH-2*BATLINE-powh,powcol);
+      printf("vbat:%1.2fV powx:%d powh:%d\n",vbat,powx,powh);
+        
     return vbat;
 }
 
-void bootReason()
+uint8_t bootReason()
 {
   esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
   esp_reset_reason_t reset_reason = esp_reset_reason();
@@ -304,9 +312,9 @@ void bootReason()
   switch(reset_reason){
     case ESP_RST_DEEPSLEEP:
         switch (wakeup_reason){
-            case ESP_SLEEP_WAKEUP_EXT0:  reason=0;break;
-            case ESP_SLEEP_WAKEUP_TIMER: reason=1;break;
-            case ESP_SLEEP_WAKEUP_TOUCHPAD:reason=3;break;
+            case ESP_SLEEP_WAKEUP_EXT0:     reason=0;break;
+            case ESP_SLEEP_WAKEUP_TIMER:    reason=1;break;
+            case ESP_SLEEP_WAKEUP_TOUCHPAD: reason=3;break;
             default: reason=2;break;
         }break;
     case ESP_RST_POWERON: reason=2;break;
@@ -321,17 +329,17 @@ void bootReason()
   }
 
   char* rt=reasont+REASL*reason;
-  printf("reason:%d\n",wakeup_reason);
-  dumpstr(reasont,37);
+  printf("reason:%d %s\n",wakeup_reason,rt);
   my_lcd.drawString(rt,32, 10, 2);
-  printf("%s",rt);
+  
+  return reason;
 }
 
 void setup() {
 
   Serial.begin(115200);
   //sleep_ms(1000);
-  delay(1000);      // pas de lightSleep avant bootReason() !
+  delay(100);      // pas de lightSleep avant bootReason() !
   printf("\n+tarif tempo with deepSleep v1.1\n");
   
   my_lcd.init();
@@ -339,7 +347,6 @@ void setup() {
   my_lcd.setRotation(0);  
   my_lcd.setTextColor(BLUE);
   my_lcd.setTextColor(YELLOW, BLACK);
-  
   
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
@@ -354,8 +361,12 @@ void setup() {
   bootReason();
   
   voltage(VOLTAGE_PIN);
+  
+  printf("fin voltage\n");
 
-  if(!wifiConnect()){goToSleep();};
+  if(!wifiConnect()){goToSleep(false);};
+  
+  printf("fin wifi\n");
   
   if(!getUDPdate(&hms,&amj,&js)){
     printf("udp_ntp ko\n");
@@ -377,7 +388,7 @@ void setup() {
   
   sleep_ms(20000);
 
-  goToSleep();
+  goToSleep(false);
   
 }
 
