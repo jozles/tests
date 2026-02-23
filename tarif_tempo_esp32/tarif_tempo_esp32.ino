@@ -170,7 +170,7 @@ void goToSleep(bool fast) {
 
 bool wifiConnect(){
   char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
-  printf("Connexion au WiFi ");
+  printf("Connexion au WiFi ");delay(100);
   my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
@@ -338,9 +338,16 @@ uint8_t bootReason()
 void setup() {
 
   Serial.begin(115200);
+  
+  Serial.setDebugOutput(true);
+esp_log_level_set("*", ESP_LOG_INFO);
+esp_log_level_set("wifi", ESP_LOG_INFO);
+esp_log_level_set("phy", ESP_LOG_INFO);
+
+  
   //sleep_ms(1000);
-  delay(100);      // pas de lightSleep avant bootReason() !
-  printf("\n+tarif tempo with deepSleep v1.1\n");
+  delay(1000);      // pas de lightSleep avant bootReason() !
+  printf("\n+tarif tempo with deepSleep v%s\n",VERSION);
   
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
@@ -364,7 +371,9 @@ void setup() {
   
   printf("fin voltage\n");
 
-  if(!wifiConnect()){goToSleep(false);};
+  //if(!wifiConnect()){goToSleep(false);};
+  
+  wifiConnect();
   
   printf("fin wifi\n");
   
