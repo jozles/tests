@@ -84,10 +84,11 @@ char* sdow={"dimanche\0lundi\0  \0mardi\0  \0mercredi\0jeudi\0  \0vendredi\0same
 #define LOW_BATTERY 3.35
 
 // consos :
-//    en fonctionnement 100-200mA(wifi)
+//    en fonctionnement 100-200mA(wifi) ; 500mA peak
 //    lightSleep 70mA avec écran on ; 
-//    deepSleep mode SCREEN 57-63uA (chge 130uA ldo with 3uA 7333, 35uA ch340 power out, 20uA divider 100k with 4.5uA 430k) 
-//                   (sc8002b is 2uA with pin1 high)
+//    deepSleep mode SCREEN 45-57uA (chge 130uA ldo with 3uA 7333, 35uA ch340 deconnect, 20uA divider 100k with 4.5uA 430k) 
+//                   (deconnect sc8002b and suppress pullup on pin 1)
+//    ch340 should be connected with an external source to have good exchanges when board is running (7333 enough for flash)
 
 #define BATX 220
 #define BATY 4
@@ -149,7 +150,7 @@ void goToSleep(bool fast) {
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
 
   pinMode(AUDIO_ENABLE,INPUT);  // high with pcb pullup (disable)
-  //digitalWrite(AUDIO_ENABLE,HIGH);
+  //digitalWrite(AUDIO_ENABLE,HIGH);  // environ 400nA de plus
   
   my_lcd.writecommand(0x10);  // lcd sleep
   delay(5);
@@ -170,7 +171,7 @@ void goToSleep(bool fast) {
 
 bool wifiConnect(){
   char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
-  printf("Connexion au WiFi ");delay(100);
+  printf("Connexion au WiFi ");
   my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
@@ -338,15 +339,8 @@ uint8_t bootReason()
 void setup() {
 
   Serial.begin(115200);
-  
-  Serial.setDebugOutput(true);
-esp_log_level_set("*", ESP_LOG_INFO);
-esp_log_level_set("wifi", ESP_LOG_INFO);
-esp_log_level_set("phy", ESP_LOG_INFO);
-
-  
   //sleep_ms(1000);
-  delay(1000);      // pas de lightSleep avant bootReason() !
+  delay(100);      // pas de lightSleep avant bootReason() !
   printf("\n+tarif tempo with deepSleep v%s\n",VERSION);
   
   my_lcd.init();
@@ -371,9 +365,7 @@ esp_log_level_set("phy", ESP_LOG_INFO);
   
   printf("fin voltage\n");
 
-  //if(!wifiConnect()){goToSleep(false);};
-  
-  wifiConnect();
+  if(!wifiConnect()){goToSleep(false);};
   
   printf("fin wifi\n");
   
@@ -395,7 +387,7 @@ esp_log_level_set("phy", ESP_LOG_INFO);
   tempo(TODAY);
   tempo(TOMORROW);
   
-  sleep_ms(20000);
+  sleep_ms(15000);
 
   goToSleep(false);
   
