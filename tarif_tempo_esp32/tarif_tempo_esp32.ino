@@ -8,7 +8,7 @@
 #include <esp_adc_cal.h>
 #include "udp_ntp.h"
 
-#define VERSION "1.2\0"
+#define VERSION "1.3\0"
 
 #define SCREEN 1
 #define PAD 0
@@ -125,6 +125,7 @@ void onTouch(){}
   #endif
 
 void goToSleep(bool fast) {
+
   if(!fast){
     my_lcd.fillRect(0,0,BATX-1,25,BLACK);
     my_lcd.setTextColor(GREEN, BLACK);
@@ -146,7 +147,7 @@ void goToSleep(bool fast) {
   delay(5);
   #endif
   
-  const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay
+  const uint64_t uS = 24ULL * 3600ULL * 1000000ULL;         // microsec delay 
   esp_sleep_enable_timer_wakeup(uS);                        // wakeup on timer
 
   pinMode(AUDIO_ENABLE,INPUT);  // high with pcb pullup (disable)
@@ -161,7 +162,7 @@ void goToSleep(bool fast) {
   pinMode(TFT_DC,   INPUT);
   pinMode(TFT_RST,  INPUT);
   
-  pinMode(TOUCH_DOUT, INPUT_PULLUP);   // disable spi touch
+  pinMode(TOUCH_DOUT, INPUT);   // disable spi touch (no pullup available)
   pinMode(TOUCH_SCK,  INPUT_PULLUP);
   pinMode(TOUCH_CS,   INPUT_PULLUP);
 
@@ -228,7 +229,7 @@ int getTempo(uint8_t tt,char* d) {
     }
   } 
   else {
-    printf("Erreur HTTP (%c): %d\n", (char*)ttt[tt],httpCode);
+    printf("Erreur HTTP (%s): %d\n", (char*)ttt[tt],httpCode);
     numcolor=httpCode;
     my_lcd.setTextColor(RED);
     my_lcd.drawString("Http",wifiXpos+50, 10, 2);
@@ -252,24 +253,25 @@ int8_t dow(char* date){   // n° jour de la semaine
 #define TODAY 0
 #define TOMORROW 1
 
-void tempo(uint8_t when){     // when = TODAY ou TOMORROW
+int tempo(uint8_t when){     // when = TODAY ou TOMORROW
   #define LD 12
   char date[LD];
   memset(date,0x00,LD);
-  uint16_t dayC=3;
-  dayC=getTempo(when,date);
-  char* dl=(sdow+9*dow(date));    // texte jour de la semaine
-  printf(" %s \n",dl);
+
+  int dayC=getTempo(when,date);
+
   if(dayC>=0){
+    char* dl=(sdow+9*dow(date));    // texte jour de la semaine
+    printf(" %s \n",dl);
     my_lcd.fillRect(rectx[when],recty[when],rectw[when],recth[when],dayColor[dayC]);
     my_lcd.setTextColor(txtColor[dayC]);
     my_lcd.drawString(dl,txtx[when],txty[when],txts);
     char datefr[]={date[8],date[9],'-',date[5],date[6],'-',date[0],date[1],date[2],date[3],'\0'};
     my_lcd.drawString(datefr,txtx[when]+8*strlen(dl),txty[when],txts);
+  } else {
+    printf("erreur dayC:%d\n",dayC);
   }
-  else {
-    sleep_ms(5000);
-  }
+  return dayC;
 }
 
 float voltage(uint8_t vp){
@@ -339,8 +341,7 @@ uint8_t bootReason()
 void setup() {
 
   Serial.begin(115200);
-  //sleep_ms(1000);
-  delay(100);      // pas de lightSleep avant bootReason() !
+  delay(500);      // pas de lightSleep avant bootReason() !
   printf("\n+tarif tempo with deepSleep v%s\n",VERSION);
   
   my_lcd.init();
@@ -383,12 +384,14 @@ void setup() {
     printf("%s",dd);
   }
   
-  
-  tempo(TODAY);
-  tempo(TOMORROW);
-  
-  sleep_ms(15000);
+  if(tempo(TODAY)>=0){
+    if(tempo(TOMORROW)>=0){
+      sleep_ms(15000);
+    }
+  } 
 
+  printf("sleep...\n");
+  delay(100);
   goToSleep(false);
   
 }
