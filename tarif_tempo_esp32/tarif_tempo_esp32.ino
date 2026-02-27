@@ -7,6 +7,8 @@
 #include <TFT_Touch.h>
 #include <esp_adc_cal.h>
 #include "udp_ntp.h"
+#include "tt_const.h"
+#include <touch_kbd.h>
 
 #define VERSION "1.3\0"
 
@@ -26,17 +28,26 @@
 #define AUDIO_ENABLE 26
 // #define BL 21
 
+// ****** kbd
+
+#define KEYNB 12  // key nb
+#define KCTLEN 4  // len ctl key text 
+#define KEYW 20   // basic key width
+#define KEYH 20   // basic key height
+uint16_t kxpos[]={0,2*KEYW,3*KEYW,4*KEYW,5*KEYW,6*KEYW,7*KEYW,8*KEYW,9*KEYW,10*KEYW,11*KEYW,12*KEYW};
+uint16_t kypos[]={0,0,0,0,0,0,0,0,0,0};
+uint16_t kwidth[]={2*KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,2*KEYW};
+uint16_t kheight[]={KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH};
+uint8_t kText[]={0x00,'A','z','e','r','t','y','u','i','o','p',0x01};
+uint8_t kCText[]={'T','a','b','\0','b','c','k','\0'};
+
+//
+
 TFT_eSPI my_lcd = TFT_eSPI(); 
 TFT_Touch my_touch = TFT_Touch(TOUCH_CS, TOUCH_SCK, TOUCH_DIN, TOUCH_DOUT);
+TKbd my_kbd = TKbd(KEYNB,kxpos,kypos,kwidth,kheight,kText,kCText,KCTLEN);
 
-#define BLACK   0x0000
-#define BLUE    0x001F
-#define RED     0xF800
-#define GREEN   0x07E0
-#define CYAN    0x07FF
-#define MAGENTA 0xF81F
-#define YELLOW  0xFFE0
-#define WHITE   0xFFFF
+
 
 const uint16_t dayColor[]={BLUE,WHITE,RED,BLACK};
 const uint16_t txtColor[]={BLACK,BLUE,BLACK,WHITE};
@@ -347,7 +358,7 @@ void setup() {
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
   my_lcd.setRotation(0);  
-  my_lcd.setTextColor(BLUE);
+  //my_lcd.setTextColor(BLUE);
   my_lcd.setTextColor(YELLOW, BLACK);
   
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
@@ -365,6 +376,8 @@ void setup() {
   voltage(VOLTAGE_PIN);
   
   printf("fin voltage\n");
+  
+  my_kbd.showKbd(0,60,240,200,CLEAR_KBD);
 
   if(!wifiConnect()){goToSleep(false);};
   
