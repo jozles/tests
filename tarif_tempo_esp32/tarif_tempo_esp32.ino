@@ -1,3 +1,4 @@
+
 #include <WiFi.h>          // Gestion du WiFi sur ESP32
 #include <HTTPClient.h>    // Pour faire des requêtes HTTP GET
 #include <ArduinoJson.h>   // Pour parser les réponses JSON
@@ -45,7 +46,7 @@ uint8_t kCText[]={'T','a','b','\0','b','c','k','\0'};
 
 TFT_eSPI my_lcd = TFT_eSPI(); 
 TFT_Touch my_touch = TFT_Touch(TOUCH_CS, TOUCH_SCK, TOUCH_DIN, TOUCH_DOUT);
-TKbd my_kbd = TKbd(KEYNB,kxpos,kypos,kwidth,kheight,kText,kCText,KCTLEN);
+TKbd my_kbd = TKbd();
 
 
 
@@ -377,7 +378,10 @@ void setup() {
   
   printf("fin voltage\n");
   
-  my_kbd.showKbd(0,60,240,200,CLEAR_KBD);
+  my_kbd.init(KEYNB,nullptr,nullptr,kwidth,kheight,kText,kCText,KCTLEN);
+  my_kbd.showKbd(0,100,280,140,CLEAR_KBD);
+  
+  while(1){delay(10);}
 
   if(!wifiConnect()){goToSleep(false);};
   
