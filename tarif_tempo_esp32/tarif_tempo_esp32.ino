@@ -31,7 +31,7 @@
 
 // ****** kbd
 
-#define KEYNB 12  // key nb
+#define KEYNB 44  // key nb
 #define KCTLEN 4  // len ctl key text 
 #define KEYW 20   // basic key width
 #define KEYH 20   // basic key height
@@ -123,6 +123,15 @@ uint16_t wifiXpos=135;  // position x message wifi
 byte js=0;
 uint32_t amj=0, hms=0;
 
+#define LSSID 32
+#define LPWD 48
+
+char ssid[LSSID];
+char pwd[LPWD];
+
+
+void input(char* str,uint8_t* lstr,char* title);
+
 void sleep_ms(uint32_t ms){         // ne sert à rien : le BL c'est 60mA 
   //delay(ms);
   WiFi.disconnect(true);
@@ -187,6 +196,11 @@ bool wifiConnect(){
   printf("Connexion au WiFi ");
   my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
+  
+  uint8_t lssid=LSSID;
+  uint8_t lpwd=LPWD;
+  if(ssid[0]<=SPACE){input(ssid,&lssid,"SSID");}
+  if(pwd[0]<=SPACE){input(pwd,&lpwd,"PWD");}
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
     //sleep_ms(wait);
@@ -378,9 +392,7 @@ void setup() {
   
   printf("fin voltage\n");
   
-  my_kbd.init(KEYNB,nullptr,nullptr,kwidth,kheight,kText,kCText,KCTLEN);
-  my_kbd.showKbd(0,100,280,140,CLEAR_KBD);
-  
+
   while(1){delay(10);}
 
   if(!wifiConnect()){goToSleep(false);};
@@ -441,4 +453,34 @@ void dumpstr(char* str,uint8_t len){
     printf("%c ",chexa[str[i]&0x0f]);
     }
   printf("\n");
+}
+
+void input(char* str,uint8_t* lstr,char* title){
+  
+  my_lcd.drawString(title,0,0,1);
+  
+  my_kbd.init(KEYNB,nullptr,nullptr,kwidth,kheight,kText,kCText,KCTLEN);
+  
+  #define MAX_STR_LEN 49
+  if(*lstr>MAX_STR_LEN){*lstr=MAX_STR_LEN;}
+  
+  char gotStr[MAX_STR_LEN];memset(gotStr,0x00,MAX_STR_LEN);
+  uint8_t pStr=0;
+  char c;
+  
+  while(c!=KEY_ENTER){
+    c=my_kbd.getKbd(0,100,280,140,NEW_KBD);
+    if(c>=0x20){if(pStr<(*lstr)){gotStr[pStr]=c;pStr++;}}
+    else {
+      switch(c){
+        case KEY_TIMOUT:goToSleep(false);
+        case KEY_ENTER:break;
+        case KEY_BACKSP: if(pStr>0){pStr--;gotStr[pStr]=SPACE;}break;
+        default: break;
+      }
+    }
+    my_lcd.drawString(gotStr,0,30,1);
+  }
+  memcpy(str,gotStr,pStr+1);
+  *lstr=pStr+1;
 }
