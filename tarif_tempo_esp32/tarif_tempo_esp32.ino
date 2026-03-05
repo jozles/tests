@@ -10,6 +10,7 @@
 #include "udp_ntp.h"
 #include "tt_const.h"
 #include <touch_kbd.h>
+#include <Preferences.h>
 
 #define VERSION "1.3\0"
 
@@ -31,23 +32,17 @@
 
 // ****** kbd
 
-#define KEYNB 44  // key nb
-#define KCTLEN 4  // len ctl key text 
-#define KEYW 20   // basic key width
-#define KEYH 20   // basic key height
-uint16_t kxpos[]={0,2*KEYW,3*KEYW,4*KEYW,5*KEYW,6*KEYW,7*KEYW,8*KEYW,9*KEYW,10*KEYW,11*KEYW,12*KEYW};
-uint16_t kypos[]={0,0,0,0,0,0,0,0,0,0};
-uint16_t kwidth[]={2*KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,KEYW,2*KEYW};
-uint16_t kheight[]={KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH,KEYH};
-uint8_t kText[]={0x00,'A','z','e','r','t','y','u','i','o','p',0x01};
-uint8_t kCText[]={'T','a','b','\0','b','c','k','\0'};
+#define XKBD 0
+#define YKBD 100
+#define WKBD 280
+#define HKBD 140
 
 //
 
 TFT_eSPI my_lcd = TFT_eSPI(); 
 TFT_Touch my_touch = TFT_Touch(TOUCH_CS, TOUCH_SCK, TOUCH_DIN, TOUCH_DOUT);
 TKbd my_kbd = TKbd();
-
+Preferences prefs;
 
 
 const uint16_t dayColor[]={BLUE,WHITE,RED,BLACK};
@@ -197,10 +192,37 @@ bool wifiConnect(){
   my_lcd.drawString("WiFi",wifiXpos, 10, 2);
   uint32_t cnt=0,wait=500,a=0;
   
-  uint8_t lssid=LSSID;
-  uint8_t lpwd=LPWD;
-  if(ssid[0]<=SPACE){input(ssid,&lssid,"SSID");}
-  if(pwd[0]<=SPACE){input(pwd,&lpwd,"PWD");}
+  prefs.begin("wifiData",false);
+  
+  if(!prefs.isKey("ssid") || !prefs.isKey("pswd")){
+    char vma='M';
+    while(vma=='M'){
+      uint8_t lssid=LSSID;
+      uint8_t lpwd=LPWD;                         // >>>>>>>>>>>>>>>>>>mise au point
+
+      input(ssid,&lssid,"SSID");
+      my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
+      input(pwd,&lpwd,"PWD ");
+      my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
+      my_lcd.drawString("SSID",0, 20, 2);   
+      my_lcd.drawString(ssid,45, 20, 2);
+      my_lcd.drawString("Password",0, 40, 2);
+      my_lcd.drawString(pwd,0, 60, 1);
+      vma=my_kbd.getVma();printf("vma:%d\n",vma);
+      my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
+    }
+    if(vma=='V'){
+      prefs.putString("ssid",ssid);
+      prefs.putString("pswd",pwd);
+    }
+  }
+  
+   String s=prefs.getString("ssid","");
+   s.toCharArray(ssid,sizeof(ssid));
+   String p=prefs.getString("pswd","");
+   p.toCharArray(ssid,sizeof(pwd));  
+  
+  my_lcd.setRotation(0);
   WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
   while (WiFi.status() != WL_CONNECTED) { 
     //sleep_ms(wait);
@@ -258,7 +280,7 @@ int getTempo(uint8_t tt,char* d) {
     printf("Erreur HTTP (%s): %d\n", (char*)ttt[tt],httpCode);
     numcolor=httpCode;
     my_lcd.setTextColor(RED);
-    my_lcd.drawString("Http",wifiXpos+50, 10, 2);
+    my_lcd.drawString("Http ko",0,RECT_TODAY_Y,2);
   }
   http.end();  // Ferme la connexion HTTP
   return numcolor;
@@ -367,8 +389,13 @@ uint8_t bootReason()
 void setup() {
 
   Serial.begin(115200);
-  delay(500);      // pas de lightSleep avant bootReason() !
+  
   printf("\n+tarif tempo with deepSleep v%s\n",VERSION);
+  delay(500);      // pas de lightSleep avant bootReason() !
+  
+  my_kbd.init(MAX_KEY_NB);
+  
+  my_touch.setCal(512, 3408, 688, 3391, 320, 240, 1);    // esp32_lcd_screen 260204-01
   
   my_lcd.init();
   my_lcd.fillScreen(BLACK);
@@ -378,7 +405,7 @@ void setup() {
   
   char vers[5];vers[0]='v';memcpy(&vers[1],VERSION,4);
   my_lcd.drawString(vers, 1, 10, 2); 
-  
+
   //SPI.end();
   //gpio_reset_pin(GPIO_TOUCH_PAD);
   //pinMode(TOUCH_PAD, INPUT);
@@ -391,9 +418,6 @@ void setup() {
   voltage(VOLTAGE_PIN);
   
   printf("fin voltage\n");
-  
-
-  while(1){delay(10);}
 
   if(!wifiConnect()){goToSleep(false);};
   
@@ -457,19 +481,24 @@ void dumpstr(char* str,uint8_t len){
 
 void input(char* str,uint8_t* lstr,char* title){
   
-  my_lcd.drawString(title,0,0,1);
+  my_touch.setRotation(3);
+  my_lcd.setRotation(3);
   
-  my_kbd.init(KEYNB,nullptr,nullptr,kwidth,kheight,kText,kCText,KCTLEN);
-  
+  my_lcd.drawString(title,0,0,2);
+
   #define MAX_STR_LEN 49
   if(*lstr>MAX_STR_LEN){*lstr=MAX_STR_LEN;}
   
-  char gotStr[MAX_STR_LEN];memset(gotStr,0x00,MAX_STR_LEN);
-  uint8_t pStr=0;
-  char c;
+  char gotStr[MAX_STR_LEN];
+  memset(gotStr,0x00,MAX_STR_LEN);
+  memcpy(gotStr,str,*lstr);
+  uint8_t pStr=strlen(str);
+  char c=0;
   
+  my_lcd.drawString(gotStr,0,30,1);
+
   while(c!=KEY_ENTER){
-    c=my_kbd.getKbd(0,100,280,140,NEW_KBD);
+    c=my_kbd.getKbd(XKBD,YKBD,WKBD,HKBD,NEW_KBD);
     if(c>=0x20){if(pStr<(*lstr)){gotStr[pStr]=c;pStr++;}}
     else {
       switch(c){
