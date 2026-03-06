@@ -12,7 +12,7 @@
 #include <touch_kbd.h>
 #include <Preferences.h>
 
-#define VERSION "1.3\0"
+#define VERSION "1.4\0"     // 1.4 flash included
 
 #define SCREEN 1
 #define PAD 0
@@ -186,19 +186,32 @@ void goToSleep(bool fast) {
                                 // ***  67mA pendant l'affichage  ***  200mA pendant le WiFi
 }
 
-bool wifiConnect(){
-  char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
-  printf("Connexion au WiFi ");
-  my_lcd.drawString("WiFi",wifiXpos, 10, 2);
-  uint32_t cnt=0,wait=500,a=0;
+void subReadParams(){
+  String s=prefs.getString("ssid","");
+  s.toCharArray(ssid,sizeof(ssid));
+  String p=prefs.getString("pswd","");
+  p.toCharArray(pwd,sizeof(pwd));
+}
+
+#define OLD_PARAMS true
+#define NEW_PARAMS false
+
+bool getWiFiParams(bool oldnew){
+  
+  bool ret=true;
   
   prefs.begin("wifiData",false);
   
-  if(!prefs.isKey("ssid") || !prefs.isKey("pswd")){
+  if(!prefs.isKey("ssid") || !prefs.isKey("pswd") || !oldnew){
+    
+    my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
+    
+    if(!oldnew){subReadParams();}
+    
     char vma='M';
     while(vma=='M'){
       uint8_t lssid=LSSID;
-      uint8_t lpwd=LPWD;                         // >>>>>>>>>>>>>>>>>>mise au point
+      uint8_t lpwd=LPWD;
 
       input(ssid,&lssid,"SSID");
       my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
@@ -211,34 +224,53 @@ bool wifiConnect(){
       vma=my_kbd.getVma();printf("vma:%d\n",vma);
       my_lcd.fillRect(0,0,WKBD,my_lcd.height(),BLACK);
     }
+    if(vma=='A'){ret=false;}
     if(vma=='V'){
+      ret=true;
       prefs.putString("ssid",ssid);
       prefs.putString("pswd",pwd);
     }
   }
   
-   String s=prefs.getString("ssid","");
-   s.toCharArray(ssid,sizeof(ssid));
-   String p=prefs.getString("pswd","");
-   p.toCharArray(ssid,sizeof(pwd));  
+  if(ret){subReadParams();}
+  prefs.end();
+  return ret; 
+}
+
+bool wifiConnect(){
+  char wifiWait[]={"+\0x\0"}; //{"-\0\\\0|\0/\0"};
+  printf("Connexion au WiFi ");
+  my_lcd.setTextColor(YELLOW, BLACK);
+  my_lcd.drawString("WiFi   ",wifiXpos, 10, 2);
+  uint32_t cnt=0,wait=500,a=0;
   
+  if(!getWiFiParams(OLD_PARAMS)){return false;}
+    
   my_lcd.setRotation(0);
-  WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
+  //WiFi.begin("pinks", "cain ne dormant pas songeait au pied des monts");
+  WiFi.begin(ssid,pwd);
+    
   while (WiFi.status() != WL_CONNECTED) { 
-    //sleep_ms(wait);
     delay(wait);
     printf(".");
     my_lcd.drawString(wifiWait+((cnt/wait)%2)*2,wifiXpos+30, 10, 2);
     cnt+=wait;
-    if(cnt>30000){
+    if(cnt>20000){
       printf("failed\r");
-      //cnt=0;a++;
-      //printf("wait 10 min ; attempt#%d ",a);
-      //sleep_ms(600000);
       char wifiMess[]={"WiFi KO  "};
       my_lcd.setTextColor(RED, BLACK);  
       my_lcd.drawString(wifiMess,wifiXpos, 10, 2);
-      sleep_ms(5000);return false;
+      my_touch.setRotation(3); 
+      my_lcd.setRotation(3); 
+      my_lcd.drawString("Nouveau WiFi ?",100, 90, 2);
+      if(my_kbd.getOuiNon()=='N'){return false;}
+      if(!getWiFiParams(NEW_PARAMS)){return false;}
+      cnt=0;
+      my_lcd.setRotation(0);
+      my_lcd.setTextColor(YELLOW, BLACK);
+      my_lcd.drawString("WiFi    ",wifiXpos, 10, 2);
+      WiFi.disconnect();
+      WiFi.begin(ssid,pwd);
     }
   }
   printf(" connecté !\n");
@@ -264,15 +296,13 @@ int getTempo(uint8_t tt,char* d) {
 
     StaticJsonDocument<512> doc;
     if (deserializeJson(doc, payload) == DeserializationError::Ok) {
-
       color = doc["libCouleur"];  // Lit la valeur "couleur"
       strcpy(d,doc["dateJour"] | "INCONNU");
       numcolor=(strstr(validColors,color)-validColors)/LENVCOLOR;
       printf("%s :%d %s ; date : %s ",(char*)ttt[tt],numcolor,color,d);
     } 
     else {
-      printf("Erreur parsing JSON (%c)",(char*)ttt[tt]);
-      
+      printf("Erreur parsing JSON (%c)",(char*)ttt[tt]); 
       numcolor=-100;
     }
   } 
@@ -280,7 +310,7 @@ int getTempo(uint8_t tt,char* d) {
     printf("Erreur HTTP (%s): %d\n", (char*)ttt[tt],httpCode);
     numcolor=httpCode;
     my_lcd.setTextColor(RED);
-    my_lcd.drawString("Http ko",0,RECT_TODAY_Y,2);
+    my_lcd.drawString("Http ko",0,RECT_TODAY_Y-15,2);
   }
   http.end();  // Ferme la connexion HTTP
   return numcolor;
@@ -381,7 +411,7 @@ uint8_t bootReason()
 
   char* rt=reasont+REASL*reason;
   printf("reason:%d %s\n",wakeup_reason,rt);
-  my_lcd.drawString(rt,32, 10, 2);
+  my_lcd.drawString(rt,36, 10, 2);
   
   return reason;
 }
@@ -416,12 +446,8 @@ void setup() {
   bootReason();
   
   voltage(VOLTAGE_PIN);
-  
-  printf("fin voltage\n");
 
   if(!wifiConnect()){goToSleep(false);};
-  
-  printf("fin wifi\n");
   
   if(!getUDPdate(&hms,&amj,&js)){
     printf("udp_ntp ko\n");
@@ -439,6 +465,7 @@ void setup() {
   
   if(tempo(TODAY)>=0){
     if(tempo(TOMORROW)>=0){
+      WiFi.disconnect();      // économies d'énergie ?
       sleep_ms(15000);
     }
   } 
@@ -504,11 +531,15 @@ void input(char* str,uint8_t* lstr,char* title){
       switch(c){
         case KEY_TIMOUT:goToSleep(false);
         case KEY_ENTER:break;
-        case KEY_BACKSP: if(pStr>0){pStr--;gotStr[pStr]=SPACE;}break;
+        case KEY_BACKSP: if(pStr>0){pStr--;gotStr[pStr]=SPACE;}break;     // SPACE needed for screen erasing
         default: break;
       }
     }
     my_lcd.drawString(gotStr,0,30,1);
+  }
+  for(int i=MAX_STR_LEN-1;i>=0;i--){          // erase trailings spaces
+    if(gotStr[i]<=SPACE){gotStr[i]=0x00;}
+    else break;
   }
   memcpy(str,gotStr,pStr+1);
   *lstr=pStr+1;
